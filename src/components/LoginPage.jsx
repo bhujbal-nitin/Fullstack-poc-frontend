@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import './LoginPage.css';
 
 const LoginPage = ({ onLogin }) => {
@@ -9,6 +10,8 @@ const LoginPage = ({ onLogin }) => {
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [animationParent] = useAutoAnimate();
+    const formRef = useRef(null);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -25,35 +28,24 @@ const LoginPage = ({ onLogin }) => {
         setError('');
 
         try {
-            const response = await axios.post('http://localhost:5050/api/auth/login', credentials, {
-                withCredentials: true // This is crucial for session-based auth
+            const response = await axios.post('/poc/api/auth/login', credentials, {
+                withCredentials: true
             });
-
-            console.log('Login response:', response); // Add for debugging
-
+            // const response = await axios.post('http://localhost:5050/poc/api/auth/login', credentials, {
+            //     withCredentials: true
+            // });
             if (response.status === 200) {
                 const { token, user } = response.data;
-
                 localStorage.setItem('authToken', token);
                 localStorage.setItem('user', JSON.stringify(user));
-
                 onLogin(user);
             }
         } catch (error) {
-            console.error('Full error details:', error);
             if (error.response) {
-                // The request was made and the server responded with a status code
-                console.error('Response data:', error.response.data);
-                console.error('Response status:', error.response.status);
-                console.error('Response headers:', error.response.headers);
                 setError(error.response.data.message || 'Login failed');
             } else if (error.request) {
-                // The request was made but no response was received
-                console.error('Request details:', error.request);
                 setError('Network error. Please check your connection and ensure the backend is running on port 5050.');
             } else {
-                // Something happened in setting up the request that triggered an Error
-                console.error('Error message:', error.message);
                 setError('An unexpected error occurred: ' + error.message);
             }
         } finally {
@@ -61,14 +53,31 @@ const LoginPage = ({ onLogin }) => {
         }
     };
 
-    
     return (
         <div className="login-container">
-            <div className="login-form">
-                <h2>Login</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label htmlFor="username">Username</label>
+            <div className="background-animation">
+                <div className="shape shape-1"></div>
+                <div className="shape shape-2"></div>
+                <div className="shape shape-3"></div>
+                <div className="shape shape-4"></div>
+            </div>
+
+            <div className="login-card" ref={animationParent}>
+                <div className="logo-container">
+                    <img
+                        src="https://automationedge.com/wp-content/uploads/2019/09/AE-Logo_c5bfc8be4434602d1da7a18476453594.png"
+                        alt="AutomationEdge Logo"
+                        className="company-logo"
+                    />
+                </div>
+
+                <div className="card-header">
+                    <h2>Welcome to AutomationEdge</h2>
+                    <p>Please enter your credentials to continue</p>
+                </div>
+
+                <form onSubmit={handleSubmit} ref={formRef}>
+                    <div className="input-group">
                         <input
                             type="text"
                             id="username"
@@ -77,12 +86,13 @@ const LoginPage = ({ onLogin }) => {
                             onChange={handleInputChange}
                             required
                             disabled={loading}
-                            placeholder="Enter your username"
+                            placeholder=" "
                         />
+                        <label htmlFor="username">Username</label>
+                        <div className="underline"></div>
                     </div>
 
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
+                    <div className="input-group">
                         <input
                             type="password"
                             id="password"
@@ -91,8 +101,10 @@ const LoginPage = ({ onLogin }) => {
                             onChange={handleInputChange}
                             required
                             disabled={loading}
-                            placeholder="Enter your password"
+                            placeholder=" "
                         />
+                        <label htmlFor="password">Password</label>
+                        <div className="underline"></div>
                     </div>
 
                     {error && <div className="error-message">{error}</div>}
@@ -102,9 +114,21 @@ const LoginPage = ({ onLogin }) => {
                         className="login-button"
                         disabled={loading || !credentials.username || !credentials.password}
                     >
-                        {loading ? 'Logging in...' : 'Login'}
+                        {loading ? (
+                            <>
+                                <span className="spinner"></span>
+                                Logging in...
+                            </>
+                        ) : (
+                            'Login'
+                        )}
                     </button>
                 </form>
+
+                {/* <div className="card-footer">
+                    <p>Need help? <a href="#">Contact Support</a></p>
+                    <a href="#" className="forgot-link">Forgot password?</a>
+                </div> */}
             </div>
         </div>
     );

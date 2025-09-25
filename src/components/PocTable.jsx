@@ -1,22 +1,15 @@
 // src/components/PocTable.jsx
 import * as React from 'react';
-import AppBar from '@mui/material/AppBar';
-import Box from '@mui/material/Box';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import MenuIcon from '@mui/icons-material/Menu';
-import Modal from '@mui/material/Modal';
-import PocPrjId from './PocPrjId';
 import {
+    Box,
+    Container,
+    Paper,
     Table,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     Chip,
     TablePagination,
     TextField,
@@ -25,21 +18,49 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Typography as MuiTypography,
+    Typography,
     Tooltip,
     Snackbar,
-    Alert
+    Alert,
+    AppBar,
+    Toolbar,
+    Button,
+    IconButton,
+    Card,
+    CardContent,
+    Menu,
+    MenuItem,
+    Checkbox,
+    ListItemText,
+    Link,
+    Popover,
+    InputLabel,
+    Select,
+    FormControl,
+    OutlinedInput,
+    alpha,
+    useTheme
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import {
+    Search as SearchIcon,
+    Visibility as VisibilityIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Add as AddIcon,
+    Menu as MenuIcon,
+    ViewColumn as ViewColumnIcon,
+    FilterList as FilterListIcon,
+    Clear as ClearIcon,
+    Close as CloseIcon 
+} from '@mui/icons-material';
 import axios from 'axios';
 
-// Import the edit form component
+// Import the form components
+import PocPrjId from './PocPrjId';
 import PocPrjIdEdit from './PocPrjIdEdit';
 
 const PocTable = ({ onNavigate, onLogout, user }) => {
+    const theme = useTheme();
     const [open, setOpen] = React.useState(false);
     const [editOpen, setEditOpen] = React.useState(false);
     const [pocData, setPocData] = React.useState([]);
@@ -54,17 +75,140 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     const [pocToEdit, setPocToEdit] = React.useState(null);
     const [snackbar, setSnackbar] = React.useState({ open: false, message: '', severity: 'success' });
 
+    // Column selection state
+    const [columnMenuAnchor, setColumnMenuAnchor] = React.useState(null);
+    const [visibleColumns, setVisibleColumns] = React.useState({
+        pocId: true,
+        pocName: true,
+        assignedTo: false,
+        startDate: true,
+        endDate: true,
+        actualStartDate: true,
+        actualEndDate: true,
+        status: true,
+        remark: true,
+        entityType: false,
+        entityName: false,
+        salesPerson: false,
+        region: false,
+        isBillable: false,
+        pocType: false,
+        description: false,
+        spocEmail: false,
+        spocDesignation: false,
+        tags: false,
+        createdBy: false,
+        estimatedEfforts: false,
+        approvedBy: false,
+        totalEfforts: false,
+        varianceDays: false
+    });
+
+    // Column filter state
+    const [columnFilters, setColumnFilters] = React.useState({
+        pocId: '',
+        pocName: '',
+        entityType: '',
+        entityName: '',
+        salesPerson: '',
+        region: '',
+        isBillable: '',
+        status: '',
+        startDate: '',
+        endDate: '',
+        pocType: '',
+        description: '',
+        spocEmail: '',
+        spocDesignation: '',
+        tags: '',
+        assignedTo: '',
+        createdBy: '',
+        actualStartDate: '',
+        actualEndDate: '',
+        estimatedEfforts: '',
+        approvedBy: '',
+        totalEfforts: '',
+        varianceDays: '',
+        remark: ''
+    });
+
+    // Filter popover state
+    const [filterAnchorEl, setFilterAnchorEl] = React.useState(null);
+    const [currentFilterColumn, setCurrentFilterColumn] = React.useState('');
+
     const handleOpen = () => setOpen(true);
-    const handleClose = () => setOpen(false);
+    // const handleClose = () => setOpen(false);
+    const handleClose = () => {
+        setOpen(false);
+        // Refresh token or validate session when modal closes
+        validateToken();
+    };
     const handleEditOpen = (poc) => {
         setPocToEdit(poc);
         setEditOpen(true);
     };
+    // const handleEditClose = () => {
+    //     setEditOpen(false);
+    //     setPocToEdit(null);
+    // };
     const handleEditClose = () => {
         setEditOpen(false);
         setPocToEdit(null);
+        validateToken();
+    };
+    // Add token validation function
+    const validateToken = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            handleLogout();
+            return;
+        }
+
+        try {
+            await axios.get('http://localhost:5050/poc/api/auth/validate', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (error) {
+            if (error.response?.status === 401) {
+                handleLogout();
+            }
+        }
     };
 
+    // // Update the handleLogout function in PocTable
+    // const handleLogout = async () => {
+    //     try {
+    //         await axios.post('http://localhost:5050/poc/api/auth/logout', {}, {
+    //             withCredentials: true
+    //         });
+    //     } catch (error) {
+    //         console.error('Logout error:', error);
+    //     } finally {
+    //         localStorage.removeItem('authToken');
+    //         localStorage.removeItem('user');
+    //         if (onLogout) {
+    //             onLogout(); // Call the parent logout function
+    //         }
+    //     }
+    // };
+
+
+    // Update the handleLogout function in PocTable
+    const handleLogout = async () => {
+        try {
+            await axios.post('http://localhost:5050/poc/api/auth/logout', {}, {
+                withCredentials: true
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            if (onLogout) {
+                onLogout(); // Call the parent logout function
+            }
+        }
+    };
     // Fetch POC data
     const fetchPocData = async () => {
         try {
@@ -75,10 +219,29 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                     'Authorization': `Bearer ${token}`
                 }
             });
-            setPocData(response.data);
+
+            // Improved sorting logic - prioritize by creation date, then by update date
+            const sortedData = response.data.sort((a, b) => {
+                // Try to get the most recent date for comparison
+                const getMostRecentDate = (item) => {
+                    // Priority: updatedAt > createdAt > startDate
+                    if (item.updatedAt) return new Date(item.updatedAt);
+                    if (item.createdAt) return new Date(item.createdAt);
+                    if (item.startDate) return new Date(item.startDate);
+                    return new Date(0); // Fallback to epoch if no dates available
+                };
+
+                const dateA = getMostRecentDate(a);
+                const dateB = getMostRecentDate(b);
+
+                // Sort in descending order (newest first)
+                return dateB.getTime() - dateA.getTime();
+            });
+
+            setPocData(sortedData);
         } catch (error) {
-            console.error('Error fetching POC data:', error);
-            showSnackbar('Failed to fetch POC data', 'error');
+            console.error('Error fetching Usecase data:', error);
+            showSnackbar('Failed to fetch Usecase data', 'error');
         } finally {
             setLoading(false);
         }
@@ -86,7 +249,18 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
 
     React.useEffect(() => {
         fetchPocData();
+
+        // Load column preferences from localStorage if available
+        const savedColumns = localStorage.getItem('pocTableColumns');
+        if (savedColumns) {
+            setVisibleColumns(JSON.parse(savedColumns));
+        }
     }, []);
+
+    // Save column preferences to localStorage when they change
+    React.useEffect(() => {
+        localStorage.setItem('pocTableColumns', JSON.stringify(visibleColumns));
+    }, [visibleColumns]);
 
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
@@ -97,25 +271,114 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setPage(0);
     };
 
-    // Filter data based on search term
-    const filteredData = pocData.filter(poc =>
-        poc.pocId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.pocName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.entityName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.salesPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.entityType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.assignedTo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.tags?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.approvedBy?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        poc.status?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Handle column filter change
+    const handleColumnFilterChange = (column, value) => {
+        setColumnFilters(prev => ({
+            ...prev,
+            [column]: value
+        }));
+        setPage(0); // Reset to first page when filtering
+    };
+
+    // Clear specific column filter
+    const handleClearColumnFilter = (column) => {
+        handleColumnFilterChange(column, '');
+    };
+
+    // Clear all filters
+    const handleClearAllFilters = () => {
+        const clearedFilters = Object.keys(columnFilters).reduce((acc, key) => {
+            acc[key] = '';
+            return acc;
+        }, {});
+        setColumnFilters(clearedFilters);
+        setSearchTerm('');
+    };
+
+    // Open filter popover
+    const handleOpenFilterPopover = (event, column) => {
+        setFilterAnchorEl(event.currentTarget);
+        setCurrentFilterColumn(column);
+    };
+
+    // Close filter popover
+    const handleCloseFilterPopover = () => {
+        setFilterAnchorEl(null);
+        setCurrentFilterColumn('');
+    };
+
+    // Filter data based on search term and column filters
+    const filteredData = pocData.filter(poc => {
+        // Global search filter
+        const matchesGlobalSearch =
+            !searchTerm ||
+            poc.pocId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.pocName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.entityName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.salesPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.entityType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.assignedTo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.tags?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.approvedBy?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.status?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        // Column filters
+        const matchesColumnFilters = Object.entries(columnFilters).every(([column, filterValue]) => {
+            if (!filterValue) return true;
+
+            const pocValue = poc[column];
+            if (pocValue === null || pocValue === undefined) return false;
+
+            // Handle boolean values (isBillable)
+            if (column === 'isBillable') {
+                if (filterValue === 'true') return pocValue === true;
+                if (filterValue === 'false') return pocValue === false;
+                return true;
+            }
+
+            // Handle date fields
+            if (column.includes('Date') && pocValue) {
+                const date = new Date(pocValue).toLocaleDateString();
+                return date.includes(filterValue);
+            }
+
+            // Handle status with exact match
+            if (column === 'status') {
+                return pocValue?.toLowerCase() === filterValue.toLowerCase();
+            }
+
+            // Default string contains match
+            return pocValue.toString().toLowerCase().includes(filterValue.toLowerCase());
+        });
+
+        return matchesGlobalSearch && matchesColumnFilters;
+    });
 
     const paginatedData = filteredData.slice(
         page * rowsPerPage,
         page * rowsPerPage + rowsPerPage
     );
+
+    // Get unique values for filter dropdowns
+    const getUniqueValues = (column) => {
+        const values = pocData
+            .map(item => item[column])
+            .filter((value, index, self) =>
+                value !== undefined &&
+                value !== null &&
+                self.indexOf(value) === index
+            )
+            .sort();
+
+        return values;
+    };
+
+    // Check if any filters are active
+    const hasActiveFilters = () => {
+        return searchTerm || Object.values(columnFilters).some(value => value !== '');
+    };
 
     const handleViewDetails = (poc) => {
         setSelectedPoc(poc);
@@ -168,29 +431,19 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setSnackbar({ ...snackbar, open: false });
     };
 
-    // Style for the modal
-    const modalStyle = {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: '80%',
-        height: '80%',
-        bgcolor: 'background.paper',
-        boxShadow: 24,
-        p: 0,
-        overflow: 'auto',
-        borderRadius: '8px'
-    };
-
     const getStatusColor = (status) => {
-        switch (status?.toLowerCase()) {
-            case 'completed': return 'success';
-            case 'in progress': return 'warning';
-            case 'pending': return 'default';
-            case 'draft': return 'secondary';
-            default: return 'default';
-        }
+    switch (status?.toLowerCase()) {
+        case 'completed': return 'success';
+        case 'in progress': return 'warning';
+        case 'pending': return 'default';
+        case 'cancelled': return 'error';
+        case 'draft': return 'secondary';
+        case 'awaiting': return 'info';
+        case 'hold': return 'secondary';
+        case 'closed': return 'error';
+        case 'converted': return 'success';
+        default: return 'default';
+    }
     };
 
     const getBillableChip = (isBillable) => {
@@ -219,91 +472,662 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         return number.toString();
     };
 
+    // Column selection handlers
+    const handleOpenColumnMenu = (event) => {
+        setColumnMenuAnchor(event.currentTarget);
+    };
+
+    const handleCloseColumnMenu = () => {
+        setColumnMenuAnchor(null);
+    };
+
+    const handleToggleColumn = (columnKey) => {
+        setVisibleColumns(prev => ({
+            ...prev,
+            [columnKey]: !prev[columnKey]
+        }));
+    };
+
+    const handleSelectAllColumns = () => {
+        const allTrue = Object.keys(visibleColumns).reduce((acc, key) => {
+            acc[key] = true;
+            return acc;
+        }, {});
+        setVisibleColumns(allTrue);
+    };
+
+    const handleDeselectAllColumns = () => {
+        const allFalse = Object.keys(visibleColumns).reduce((acc, key) => {
+            acc[key] = false;
+            return acc;
+        }, {});
+        // Keep at least one column visible
+        allFalse.pocId = true;
+        setVisibleColumns(allFalse);
+    };
+
+    // Column configuration
+    // const columnConfig = {
+    //     pocId: {
+    //         label: 'Usecase ID',
+    //         truncate: false,
+    //         render: (poc) => (
+    //             <Link
+    //                 component="button"
+    //                 onClick={() => handleViewDetails(poc)}
+    //                 sx={{
+    //                     fontWeight: 'bold',
+    //                     textDecoration: 'none',
+    //                     color: 'primary.main',
+    //                     '&:hover': {
+    //                         textDecoration: 'underline',
+    //                         cursor: 'pointer'
+    //                     }
+    //                 }}
+    //             >
+    //                 {poc.pocId}
+    //             </Link>
+    //         )
+    //     },
+    //     pocName: { label: 'Usecase Name', truncate: 20 },
+    //     assignedTo: { label: 'Assigned To', truncate: false },
+    //     startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
+    //     endDate: { label: 'End Date', truncate: false, render: (poc) => formatDate(poc.endDate) },
+    //     actualStartDate: { label: 'Actual Start Date', truncate: false, render: (poc) => formatDate(poc.actualStartDate) },
+    //     actualEndDate: { label: 'Actual End Date', truncate: false, render: (poc) => formatDate(poc.actualEndDate) },
+    //     status: {
+    //         label: 'Status', truncate: false, render: (poc) => (
+    //             <Chip
+    //                 label={poc.status || 'Draft'}
+    //                 color={getStatusColor(poc.status)}
+    //                 size="small"
+    //             />
+    //         )
+    //     },
+    //     remark: { label: 'Remark', truncate: 20 },
+    //     entityType: { label: 'Client Type', truncate: false },
+    //     entityName: { label: 'Company Name', truncate: 15 },
+    //     salesPerson: { label: 'Sales Person', truncate: false },
+    //     region: { label: 'Region', truncate: false },
+    //     isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
+    //     pocType: { label: 'Usecase Type', truncate: false },
+    //     description: { label: 'Description', truncate: 25 },
+    //     spocEmail: { label: 'SPOC Email', truncate: 20 },
+    //     spocDesignation: { label: 'SPOC Designation', truncate: false },
+    //     tags: { label: 'Tags', truncate: 15 },
+    //     createdBy: { label: 'Created By', truncate: false },
+    //     estimatedEfforts: { label: 'Estimated Efforts', truncate: false },
+    //     approvedBy: { label: 'Approved By', truncate: false },
+    //     totalEfforts: { label: 'Total Efforts', truncate: false },
+    //     varianceDays: { label: 'Variance Days', truncate: false }
+    // };
+
+    // Add this state for editing status
+    const [editingStatus, setEditingStatus] = React.useState(null);
+    const [statusMenuAnchor, setStatusMenuAnchor] = React.useState(null);
+
+    // Status options
+    const statusOptions = ['Pending', 'In Progress', 'Completed', 'Cancelled', 'Awaiting', 'Hold', 'Closed', 'Converted'];
+
+
+    // Function to handle status change
+    const handleStatusChange = async (poc, newStatus) => {
+        try {
+            const token = localStorage.getItem('authToken');
+            await axios.put(`http://localhost:5050/poc/updateStatus/${poc.pocId}`,
+                { status: newStatus },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            // Update local state
+            setPocData(prevData =>
+                prevData.map(item =>
+                    item.pocId === poc.pocId ? { ...item, status: newStatus } : item
+                )
+            );
+
+            showSnackbar(`Status updated to ${newStatus}`, 'success');
+        } catch (error) {
+            console.error('Error updating status:', error);
+            showSnackbar('Failed to update status', 'error');
+        } finally {
+            setEditingStatus(null);
+            setStatusMenuAnchor(null);
+        }
+    };
+
+    // Open status menu
+    const handleOpenStatusMenu = (event, poc) => {
+        setEditingStatus(poc);
+        setStatusMenuAnchor(event.currentTarget);
+    };
+
+    // Close status menu
+    const handleCloseStatusMenu = () => {
+        setEditingStatus(null);
+        setStatusMenuAnchor(null);
+    };
+
+    // Update the status column configuration in columnConfig
+    const columnConfig = {
+        pocId: {
+            label: 'Usecase ID',
+            truncate: false,
+            render: (poc) => (
+                <Link
+                    component="button"
+                    onClick={() => handleViewDetails(poc)}
+                    sx={{
+                        fontWeight: 'bold',
+                        textDecoration: 'none',
+                        color: 'primary.main',
+                        '&:hover': {
+                            textDecoration: 'underline',
+                            cursor: 'pointer'
+                        }
+                    }}
+                >
+                    {poc.pocId}
+                </Link>
+            )
+        },
+        pocName: { label: 'Usecase Name', truncate: 20 },
+        assignedTo: { label: 'Assigned To', truncate: false },
+        startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
+        endDate: { label: 'End Date', truncate: false, render: (poc) => formatDate(poc.endDate) },
+        actualStartDate: { label: 'Actual Start Date', truncate: false, render: (poc) => formatDate(poc.actualStartDate) },
+        actualEndDate: { label: 'Actual End Date', truncate: false, render: (poc) => formatDate(poc.actualEndDate) },
+        status: {
+            label: 'Status',
+            truncate: false,
+            render: (poc) => (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Chip
+                        label={poc.status || 'Pending'}
+                        color={getStatusColor(poc.status)}
+                        size="small"
+                        onClick={(e) => handleOpenStatusMenu(e, poc)}
+                        sx={{
+                            cursor: 'pointer',
+                            '&:hover': {
+                                opacity: 0.8
+                            }
+                        }}
+                    />
+                </Box>
+            )
+        },
+        remark: { label: 'Remark', truncate: 20 },
+        entityType: { label: 'Client Type', truncate: false },
+        entityName: { label: 'Company Name', truncate: 15 },
+        salesPerson: { label: 'Sales Person', truncate: false },
+        region: { label: 'Region', truncate: false },
+        isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
+        pocType: { label: 'Usecase Type', truncate: false },
+        description: { label: 'Description', truncate: 25 },
+        spocEmail: { label: 'SPOC Email', truncate: 20 },
+        spocDesignation: { label: 'SPOC Designation', truncate: false },
+        tags: { label: 'Tags', truncate: 15 },
+        createdBy: { label: 'Created By', truncate: false },
+        estimatedEfforts: { label: 'Estimated Efforts', truncate: false },
+        approvedBy: { label: 'Approved By', truncate: false },
+        totalEfforts: { label: 'Total Efforts', truncate: false },
+        varianceDays: { label: 'Variance Days', truncate: false }
+    };
+
+    //     const getStatusColor = (status) => {
+    //     switch (status?.toLowerCase()) {
+    //         case 'completed': return 'success';
+    //         case 'in progress': return 'warning';
+    //         case 'pending': return 'default';
+    //         case 'cancelled': return 'error';
+    //         case 'draft': return 'secondary';
+    //         default: return 'default';
+    //     }
+    // };
+
+
+
+
+
     return (
-        <Box sx={{ flexGrow: 1 }}>
-            <AppBar position="static">
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+            {/* App Bar */}
+            <AppBar position="static" elevation={1} sx={{ bgcolor: theme.palette.primary.main }}>
                 <Toolbar>
                     <IconButton
-                        size="large"
                         edge="start"
                         color="inherit"
-                        aria-label="menu"
-                        sx={{ mr: 2 }}
+                        aria-label="open drawer"
                         onClick={() => onNavigate('dashboard')}
+                        sx={{ mr: 2 }}
                     >
                         <MenuIcon />
                     </IconButton>
-                    <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                        POC Code Management
-                    </Typography>
-                    <Typography variant="body1" sx={{ mr: 2 }}>
-                        Welcome, {user?.username}
-                    </Typography>
-
-                    <Button
+                    <Typography
+                        component="h1"
+                        variant="h6"
                         color="inherit"
-                        onClick={handleOpen}
-                        sx={{ mr: 1 }}
+                        noWrap
+                        sx={{ flexGrow: 1 }}
                     >
-                        Create POC
-                    </Button>
-
+                        Code/Id Management
+                    </Typography>
+                    <Typography variant="body2" color="inherit" sx={{ mr: 2 }}>
+                        Welcome, {user?.emp_name}
+                    </Typography>
                     <Button color="inherit" onClick={onLogout}>Logout</Button>
                 </Toolbar>
             </AppBar>
 
+            {/* Main Content */}
+            <Box sx={{ flexGrow: 1, p: 2, overflow: 'hidden', bgcolor: '#f5f7f9' }}>
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 2, boxShadow: 3 }}>
+                    {/* Header with search and actions */}
+                    <Box sx={{
+                        p: 2,
+                        borderBottom: 1,
+                        borderColor: 'divider',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 2,
+                        bgcolor: alpha(theme.palette.primary.main, 0.05)
+                    }}>
+                        <Typography variant="h5" component="h2" color="primary" fontWeight="bold">
+                            Usecase Management
+                        </Typography>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextField
+                                placeholder="Search POC codes..."
+                                variant="outlined"
+                                size="small"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                                sx={{ width: 250 }}
+                            />
+
+                            {hasActiveFilters() && (
+                                <Tooltip title="Clear all filters">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleClearAllFilters}
+                                        color="primary"
+                                    >
+                                        <ClearIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            <Button
+                                variant="outlined"
+                                startIcon={<ViewColumnIcon />}
+                                onClick={handleOpenColumnMenu}
+                                size="small"
+                            >
+                                Columns
+                            </Button>
+
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={handleOpen}
+                                size="small"
+                                sx={{
+                                    bgcolor: theme.palette.primary.main,
+                                    '&:hover': {
+                                        bgcolor: theme.palette.primary.dark
+                                    }
+                                }}
+                            >
+                                Create Usecase
+                            </Button>
+                        </Box>
+                    </Box>
+
+                    {/* Table Container */}
+                    <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        {loading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
+                                <Typography>Loading POC data...</Typography>
+                            </Box>
+                        ) : (
+                            <>
+                                <TableContainer sx={{ flexGrow: 1, overflow: 'auto' }}>
+                                    <Table stickyHeader aria-label="poc table" size="small" sx={{ minWidth: 1000 }}>
+                                        <TableHead>
+                                            <TableRow>
+                                                {Object.entries(columnConfig).map(([key, config]) =>
+                                                    visibleColumns[key] && (
+                                                        <TableCell key={key} sx={{
+                                                            whiteSpace: 'nowrap',
+                                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                                <span>{config.label}</span>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={(e) => handleOpenFilterPopover(e, key)}
+                                                                    color={columnFilters[key] ? 'primary' : 'default'}
+                                                                    sx={{ ml: 0.5 }}
+                                                                >
+                                                                    <FilterListIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Box>
+                                                            {columnFilters[key] && (
+                                                                <Box sx={{ mt: 0.5 }}>
+                                                                    <Chip
+                                                                        label={columnFilters[key]}
+                                                                        size="small"
+                                                                        onDelete={() => handleClearColumnFilter(key)}
+                                                                    />
+                                                                </Box>
+                                                            )}
+                                                        </TableCell>
+                                                    )
+                                                )}
+                                                <TableCell sx={{
+                                                    whiteSpace: 'nowrap',
+                                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                    fontWeight: 'bold'
+                                                }}>
+                                                    Actions
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {paginatedData.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={Object.keys(visibleColumns).filter(k => visibleColumns[k]).length + 1} align="center" sx={{ py: 3 }}>
+                                                        <Typography variant="body1" color="textSecondary">
+                                                            {searchTerm || Object.values(columnFilters).some(f => f)
+                                                                ? 'No matching POC codes found'
+                                                                : 'No Usecase codes available. Click "Create Usecase" to get started.'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                paginatedData.map((poc) => (
+                                                    <TableRow
+                                                        key={poc.pocId}
+                                                        hover
+                                                        sx={{
+                                                            '&:nth-of-type(even)': {
+                                                                bgcolor: alpha(theme.palette.primary.main, 0.02)
+                                                            }
+                                                        }}
+                                                    >
+                                                        {Object.entries(columnConfig).map(([key, config]) =>
+                                                            visibleColumns[key] && (
+                                                                <TableCell key={key} sx={{ whiteSpace: 'nowrap' }}>
+                                                                    {config.render ? (
+                                                                        config.render(poc)
+                                                                    ) : (
+                                                                        <Tooltip title={poc[key] || '-'}>
+                                                                            <span>
+                                                                                {config.truncate ?
+                                                                                    truncateText(poc[key], config.truncate) :
+                                                                                    (poc[key] || '-')
+                                                                                }
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                </TableCell>
+                                                            )
+                                                        )}
+                                                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                                            <Tooltip title="View Details">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="primary"
+                                                                    onClick={() => handleViewDetails(poc)}
+                                                                    sx={{ mr: 0.5 }}
+                                                                >
+                                                                    <VisibilityIcon />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="Edit">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="secondary"
+                                                                    onClick={() => handleEditOpen(poc)}
+                                                                    sx={{ mr: 0.5 }}
+                                                                >
+                                                                    <EditIcon />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="Delete">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="error"
+                                                                    onClick={() => handleDeleteClick(poc)}
+                                                                >
+                                                                    <DeleteIcon />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+
+                                {/* Pagination */}
+                                <Box sx={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    p: 1,
+                                    borderTop: 1,
+                                    borderColor: 'divider',
+                                    bgcolor: alpha(theme.palette.primary.main, 0.03)
+                                }}>
+                                    <Typography variant="body2" color="textSecondary" sx={{ ml: 2 }}>
+                                        Showing {filteredData.length} of {pocData.length} POC codes
+                                    </Typography>
+                                    <TablePagination
+                                        rowsPerPageOptions={[5, 10, 25]}
+                                        component="div"
+                                        count={filteredData.length}
+                                        rowsPerPage={rowsPerPage}
+                                        page={page}
+                                        onPageChange={handleChangePage}
+                                        onRowsPerPageChange={handleChangeRowsPerPage}
+                                    />
+                                </Box>
+                            </>
+                        )}
+                    </Box>
+                </Card>
+            </Box>
+
+            {/* Column Selection Menu */}
+            <Menu
+                anchorEl={columnMenuAnchor}
+                open={Boolean(columnMenuAnchor)}
+                onClose={handleCloseColumnMenu}
+                PaperProps={{
+                    style: {
+                        maxHeight: 400,
+                        width: 250,
+                    },
+                }}
+            >
+                <MenuItem onClick={handleSelectAllColumns}>
+                    <ListItemText>Select All</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleDeselectAllColumns}>
+                    <ListItemText>Deselect All</ListItemText>
+                </MenuItem>
+                <Box sx={{ borderTop: 1, borderColor: 'divider', mt: 1, pt: 1 }} />
+                {Object.entries(columnConfig).map(([key, config]) => (
+                    <MenuItem key={key} onClick={() => handleToggleColumn(key)}>
+                        <Checkbox checked={visibleColumns[key]} />
+                        <ListItemText>{config.label}</ListItemText>
+                    </MenuItem>
+                ))}
+            </Menu>
+
+            {/* Filter Popover */}
+            <Popover
+                open={Boolean(filterAnchorEl)}
+                anchorEl={filterAnchorEl}
+                onClose={handleCloseFilterPopover}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                }}
+            >
+                <Box sx={{ p: 2, minWidth: 200 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                        Filter {columnConfig[currentFilterColumn]?.label}
+                    </Typography>
+
+                    {currentFilterColumn === 'isBillable' ? (
+                        <FormControl fullWidth size="small">
+                            <InputLabel>Billable Status</InputLabel>
+                            <Select
+                                value={columnFilters.isBillable}
+                                onChange={(e) => handleColumnFilterChange('isBillable', e.target.value)}
+                                input={<OutlinedInput label="Billable Status" />}
+                            >
+                                <MenuItem value="">All</MenuItem>
+                                <MenuItem value="true">Billable</MenuItem>
+                                <MenuItem value="false">Non-Billable</MenuItem>
+                            </Select>
+                        </FormControl>
+                    ) : currentFilterColumn === 'status' ? (
+                        <FormControl fullWidth size="small">
+                            <InputLabel>Status</InputLabel>
+                            <Select
+                                value={columnFilters.status}
+                                onChange={(e) => handleColumnFilterChange('status', e.target.value)}
+                                input={<OutlinedInput label="Status" />}
+                            >
+                                <MenuItem value="">All</MenuItem>
+                                {getUniqueValues('status').map(value => (
+                                    <MenuItem key={value} value={value}>{value}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    ) : (
+                        <TextField
+                            fullWidth
+                            size="small"
+                            variant="outlined"
+                            placeholder={`Filter ${columnConfig[currentFilterColumn]?.label}`}
+                            value={columnFilters[currentFilterColumn]}
+                            onChange={(e) => handleColumnFilterChange(currentFilterColumn, e.target.value)}
+                        />
+                    )}
+
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button
+                            size="small"
+                            onClick={() => handleClearColumnFilter(currentFilterColumn)}
+                            disabled={!columnFilters[currentFilterColumn]}
+                        >
+                            Clear
+                        </Button>
+                    </Box>
+                </Box>
+            </Popover>
+
+            {/* Status Change Menu */}
+            <Menu
+                anchorEl={statusMenuAnchor}
+                open={Boolean(statusMenuAnchor)}
+                onClose={handleCloseStatusMenu}
+                PaperProps={{
+                    style: {
+                        width: 200,
+                    },
+                }}
+            >
+                {statusOptions.map((status) => (
+                    <MenuItem
+                        key={status}
+                        onClick={() => handleStatusChange(editingStatus, status)}
+                        selected={editingStatus?.status === status}
+                    >
+                        <Chip
+                            label={status}
+                            color={getStatusColor(status)}
+                            size="small"
+                            sx={{ width: '100%', justifyContent: 'center' }}
+                        />
+                    </MenuItem>
+                ))}
+            </Menu>
+
             {/* Modal for PocPrjId */}
-            <Modal
+            <Dialog
                 open={open}
                 onClose={handleClose}
-                aria-labelledby="poc-creation-modal"
-                aria-describedby="poc-creation-form"
+                maxWidth="lg"
+                fullWidth
             >
-                <Box sx={modalStyle}>
+                <DialogContent dividers>
                     <PocPrjId
                         onClose={handleClose}
                         onSuccess={() => {
                             handleClose();
-                            fetchPocData();
+                            setPage(0); // Reset to first page
+                            setTimeout(() => {
+                                fetchPocData();
+                                showSnackbar('POC record created successfully', 'success');
+                            }, 500);
                         }}
                     />
-                </Box>
-            </Modal>
-
-            {/* Modal for PocPrjIdEdit */}
-            <Modal
-                open={editOpen}
-                onClose={handleEditClose}
-                aria-labelledby="poc-edit-modal"
-                aria-describedby="poc-edit-form"
-            >
-                <Box sx={modalStyle}>
-                    <PocPrjIdEdit
-                        poc={pocToEdit}
-                        onClose={handleEditClose}
-                        onSuccess={() => {
-                            handleEditClose();
-                            fetchPocData();
-                            showSnackbar('POC record updated successfully', 'success');
-                        }}
-                    />
-                </Box>
-            </Modal>
+                </DialogContent>
+            </Dialog>
 
             {/* Detail Dialog */}
             <Dialog open={detailDialogOpen} onClose={handleCloseDetails} maxWidth="md" fullWidth>
-                <DialogTitle>POC Details - {selectedPoc?.pocId}</DialogTitle>
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    Usecase Details - {selectedPoc?.pocId}
+                    <IconButton
+                        onClick={handleCloseDetails}
+                        sx={{ ml: 2 }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
                 <DialogContent dividers>
                     {selectedPoc && (
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                            <DetailItem label="POC ID" value={selectedPoc.pocId} />
-                            <DetailItem label="POC Name" value={selectedPoc.pocName} />
+                            <DetailItem label="Usecase ID" value={selectedPoc.pocId} />
+                            <DetailItem label="Project Name" value={selectedPoc.pocName} />
+                            <DetailItem label="Description" value={selectedPoc.description || '-'} />
                             <DetailItem label="Client Type" value={selectedPoc.entityType} />
+                            <DetailItem label="POC Type" value={selectedPoc.pocType} />
                             <DetailItem label="Company Name" value={selectedPoc.entityName} />
                             <DetailItem label="Sales Person" value={selectedPoc.salesPerson} />
                             <DetailItem label="Region" value={selectedPoc.region} />
+                            <DetailItem label="SPOC Email" value={selectedPoc.spocEmail || '-'} />
+                            <DetailItem label="SPOC Designation" value={selectedPoc.spocDesignation || '-'} />
                             <DetailItem label="Billable" value={selectedPoc.isBillable ? 'Yes' : 'No'} />
-                            <DetailItem label="POC Type" value={selectedPoc.pocType} />
+                            <DetailItem label="Tags" value={selectedPoc.tags || '-'} />
                             <DetailItem label="Assigned To" value={selectedPoc.assignedTo} />
                             <DetailItem label="Created By" value={selectedPoc.createdBy} />
                             <DetailItem label="Start Date" value={formatDate(selectedPoc.startDate)} />
@@ -311,21 +1135,59 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Actual Start Date" value={formatDate(selectedPoc.actualStartDate)} />
                             <DetailItem label="Actual End Date" value={formatDate(selectedPoc.actualEndDate)} />
                             <DetailItem label="Estimated Efforts" value={formatNumber(selectedPoc.estimatedEfforts)} />
+                            <DetailItem label="Approved By" value={selectedPoc.approvedBy || '-'} />
                             <DetailItem label="Total Efforts" value={formatNumber(selectedPoc.totalEfforts)} />
                             <DetailItem label="Variance Days" value={formatNumber(selectedPoc.varianceDays)} />
-                            <DetailItem label="Approved By" value={selectedPoc.approvedBy || '-'} />
-                            <DetailItem label="SPOC Email" value={selectedPoc.spocEmail || '-'} />
-                            <DetailItem label="SPOC Designation" value={selectedPoc.spocDesignation || '-'} />
-                            <DetailItem label="Tags" value={selectedPoc.tags || '-'} />
-                            <DetailItem label="Description" value={selectedPoc.description || '-'} />
                             <DetailItem label="Remark" value={selectedPoc.remark || '-'} />
-                            <DetailItem label="Status" value={selectedPoc.status || 'Draft'} />
+                            <DetailItem
+                                label="Status"
+                                value={selectedPoc.status || 'Pending'}
+                                render={(value) => (
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Chip
+                                            label={value}
+                                            color={getStatusColor(value)}
+                                            size="small"
+                                            onClick={(e) => {
+                                                setStatusMenuAnchor(e.currentTarget);
+                                                setEditingStatus(selectedPoc);
+                                            }}
+                                            sx={{
+                                                cursor: 'pointer',
+                                                '&:hover': {
+                                                    opacity: 0.8
+                                                }
+                                            }}
+                                        />
+                                    </Box>
+                                )}
+                            />
                         </Box>
                     )}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDetails}>Close</Button>
-                </DialogActions>
+            </Dialog>
+
+            {/* Modal for PocPrjIdEdit */}
+            <Dialog
+                open={editOpen}
+                onClose={handleEditClose}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogContent dividers>
+                    <PocPrjIdEdit
+                        poc={pocToEdit}
+                        onClose={handleEditClose}
+                        onSuccess={() => {
+                            handleEditClose();
+                            setPage(0); // Reset to first page
+                            setTimeout(() => {
+                                fetchPocData();
+                                showSnackbar('POC record updated successfully', 'success');
+                            }, 500);
+                        }}
+                    />
+                </DialogContent>
             </Dialog>
 
             {/* Delete Confirmation Dialog */}
@@ -358,184 +1220,28 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-
-            {/* Main content */}
-            <Box sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                    <Typography variant="h5" gutterBottom>
-                        POC Code List ({pocData.length})
-                    </Typography>
-
-                    <TextField
-                        placeholder="Search POC codes..."
-                        variant="outlined"
-                        size="small"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ width: 300 }}
-                    />
-                </Box>
-
-                {loading ? (
-                    <Typography>Loading POC data...</Typography>
-                ) : (
-                    <>
-                        <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 200px)', overflowX: 'auto' }}>
-                            <Table stickyHeader sx={{ minWidth: 2400 }} aria-label="poc table">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell><strong>POC ID</strong></TableCell>
-                                        <TableCell><strong>Project Name</strong></TableCell>
-                                        <TableCell><strong>Client Type</strong></TableCell>
-                                        <TableCell><strong>Company Name</strong></TableCell>
-                                        <TableCell><strong>Sales Person</strong></TableCell>
-                                        <TableCell><strong>Description</strong></TableCell>
-                                        <TableCell><strong>Assigned To</strong></TableCell>
-                                        <TableCell><strong>Created By</strong></TableCell>
-                                        <TableCell><strong>Start Date</strong></TableCell>
-                                        <TableCell><strong>End Date</strong></TableCell>
-                                        <TableCell><strong>Actual Start Date</strong></TableCell>
-                                        <TableCell><strong>Actual End Date</strong></TableCell>
-                                        <TableCell><strong>Estimated Efforts</strong></TableCell>
-                                        <TableCell><strong>Total Efforts</strong></TableCell>
-                                        <TableCell><strong>Variance Days</strong></TableCell>
-                                        <TableCell><strong>Approved By</strong></TableCell>
-                                        <TableCell><strong>Remark</strong></TableCell>
-                                        <TableCell><strong>Region</strong></TableCell>
-                                        <TableCell><strong>Billable</strong></TableCell>
-                                        <TableCell><strong>POC Type</strong></TableCell>
-                                        <TableCell><strong>SPOC Email</strong></TableCell>
-                                        <TableCell><strong>SPOC Designation</strong></TableCell>
-                                        <TableCell><strong>Tags</strong></TableCell>
-                                        <TableCell><strong>Status</strong></TableCell>
-                                        <TableCell><strong>Actions</strong></TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {paginatedData.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={25} align="center" sx={{ py: 3 }}>
-                                                <Typography variant="body1" color="textSecondary">
-                                                    {searchTerm ? 'No matching POC codes found' : 'No POC codes available. Click "Create POC" to get started.'}
-                                                </Typography>
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        paginatedData.map((poc) => (
-                                            <TableRow key={poc.pocId} hover>
-                                                <TableCell sx={{ fontWeight: 'bold' }}>{poc.pocId}</TableCell>
-                                                <TableCell>{poc.pocName}</TableCell>
-                                                <TableCell>{poc.entityType}</TableCell>
-                                                <TableCell>{poc.entityName}</TableCell>
-                                                <TableCell>{poc.salesPerson}</TableCell>
-                                                <TableCell>
-                                                    <Tooltip title={poc.description || '-'}>
-                                                        <span>{truncateText(poc.description, 20)}</span>
-                                                    </Tooltip>
-                                                </TableCell>
-                                                <TableCell>{poc.assignedTo}</TableCell>
-                                                <TableCell>{poc.createdBy}</TableCell>
-                                                <TableCell>{formatDate(poc.startDate)}</TableCell>
-                                                <TableCell>{formatDate(poc.endDate)}</TableCell>
-                                                <TableCell>{formatDate(poc.actualStartDate)}</TableCell>
-                                                <TableCell>{formatDate(poc.actualEndDate)}</TableCell>
-                                                <TableCell>{formatNumber(poc.estimatedEfforts)}</TableCell>
-                                                <TableCell>{formatNumber(poc.totalEfforts)}</TableCell>
-                                                <TableCell>{formatNumber(poc.varianceDays)}</TableCell>
-                                                <TableCell>{poc.approvedBy || '-'}</TableCell>
-                                                <TableCell>
-                                                    <Tooltip title={poc.remark || '-'}>
-                                                        <span>{truncateText(poc.remark, 15)}</span>
-                                                    </Tooltip>
-                                                </TableCell>
-                                                <TableCell>{poc.region}</TableCell>
-                                                <TableCell>{getBillableChip(poc.isBillable)}</TableCell>
-                                                <TableCell>{poc.pocType}</TableCell>
-                                                <TableCell>{poc.spocEmail || '-'}</TableCell>
-                                                <TableCell>
-                                                    <Tooltip title={poc.spocDesignation || '-'}>
-                                                        <span>{truncateText(poc.spocDesignation, 15)}</span>
-                                                    </Tooltip>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Tooltip title={poc.tags || '-'}>
-                                                        <span>{truncateText(poc.tags, 15)}</span>
-                                                    </Tooltip>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        label={poc.status || 'Draft'}
-                                                        color={getStatusColor(poc.status)}
-                                                        size="small"
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleViewDetails(poc)}
-                                                        color="primary"
-                                                        title="View Details"
-                                                    >
-                                                        <VisibilityIcon />
-                                                    </IconButton>
-                                                    <IconButton 
-                                                        size="small" 
-                                                        color="secondary" 
-                                                        title="Edit"
-                                                        onClick={() => handleEditOpen(poc)}
-                                                    >
-                                                        <EditIcon />
-                                                    </IconButton>
-                                                    <IconButton
-                                                        size="small"
-                                                        color="error"
-                                                        title="Delete"
-                                                        onClick={() => handleDeleteClick(poc)}
-                                                    >
-                                                        <DeleteIcon />
-                                                    </IconButton>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-
-                        <TablePagination
-                            rowsPerPageOptions={[5, 10, 25]}
-                            component="div"
-                            count={filteredData.length}
-                            rowsPerPage={rowsPerPage}
-                            page={page}
-                            onPageChange={handleChangePage}
-                            onRowsPerPageChange={handleChangeRowsPerPage}
-                            sx={{ mt: 2 }}
-                        />
-                    </>
-                )}
-            </Box>
         </Box>
     );
 };
 
 // Helper component for detail view
-const DetailItem = ({ label, value }) => (
+// Updated DetailItem component
+const DetailItem = ({ label, value, render }) => (
     <Box sx={{ mb: 1 }}>
-        <MuiTypography variant="subtitle2" color="textSecondary" gutterBottom>
+        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
             {label}:
-        </MuiTypography>
-        <MuiTypography variant="body1">
-            {value || '-'}
-        </MuiTypography>
+        </Typography>
+        {render ? (
+            render(value)
+        ) : (
+            <Typography variant="body1">
+                {value || '-'}
+            </Typography>
+        )}
     </Box>
 );
+
+
+
 
 export default PocTable;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Pageheading from "./components/Pageheading";
 import Dropdown from "./components/DropDown";
 import TextInput from "./components/TextInput";
@@ -11,9 +12,25 @@ import PocTable from "./components/PocTable";
 import axios from "axios";
 import "./App.css";
 
+// Main App component with routing
 function App() {
+
+
+
+  return (
+    <Router basename="/usecase">
+      <AppContent />
+    </Router>
+  );
+}
+
+// Move all your existing logic to this component
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+
   // Authentication and navigation state
-  const [currentView, setCurrentView] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
 
@@ -60,64 +77,80 @@ function App() {
   // Function to fetch sales persons from API
   const fetchSalesPersons = (token) => {
     setLoadingSalesPersons(true);
-    axios.get('http://localhost:5050/poc/getAllSalesPerson', {
+    axios.get('http://10.41.11.103:5050/poc/getAllSalesPerson', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     })
-    .then(response => {
-      if (response.data && Array.isArray(response.data)) {
-        setSalesPersons(response.data);
-      } else {
-        console.error('Invalid response format for sales persons');
+      .then(response => {
+        if (response.data && Array.isArray(response.data)) {
+          setSalesPersons(response.data);
+        } else {
+          console.error('Invalid response format for sales persons');
+          setSalesPersons([]);
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching sales persons:', error);
         setSalesPersons([]);
-      }
-    })
-    .catch(error => {
-      console.error('Error fetching sales persons:', error);
-      setSalesPersons([]);
-    })
-    .finally(() => {
-      setLoadingSalesPersons(false);
-    });
+      })
+      .finally(() => {
+        setLoadingSalesPersons(false);
+      });
   };
 
-  // Check if user is already logged in on app load
+  // 1️⃣ Check if user is already logged in on app load
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('user');
 
+    const redirectToLogin = () => {
+      if (location.pathname !== '/login') {
+        navigate('/login', { replace: true });
+      }
+    };
+
+    const redirectToDashboard = () => {
+      if (location.pathname === '/login') {
+        navigate('/dashboard', { replace: true });
+      }
+    };
+
     if (token && userData) {
-      // Validate token with backend
-      axios.get('http://localhost:5050/api/auth/validate', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(response => {
-        if (response.data.valid) {
-          setCurrentUser(JSON.parse(userData));
-          setCurrentView('dashboard');
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
-          // Fetch sales persons after successful authentication
-          fetchSalesPersons(token);
-        }
-      })
-      .catch(() => {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-      })
-      .finally(() => {
-        setAuthChecked(true);
-      });
+      axios
+        .get('http://10.41.11.103:5050/poc/api/auth/validate', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then((res) => {
+          if (res.data.valid) {
+            setCurrentUser(JSON.parse(userData));
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            fetchSalesPersons(token);
+            redirectToDashboard();
+          } else {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            redirectToLogin();
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('user');
+          redirectToLogin();
+        })
+        .finally(() => setAuthChecked(true));
     } else {
       setAuthChecked(true);
+      redirectToLogin();
     }
-  }, []);
+  }, []); // only run once on mount
+
+
 
   // Handle login
   const handleLogin = (user) => {
     setCurrentUser(user);
-    setCurrentView('dashboard');
+    navigate('/dashboard');
     // Set default auth header for all requests
     const token = localStorage.getItem('authToken');
     if (token) {
@@ -130,7 +163,7 @@ function App() {
   // Handle logout
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5050/api/auth/logout', {}, {
+      await axios.post('http://10.41.11.103:5050/poc/api/auth/logout', {}, {
         withCredentials: true
       });
     } catch (error) {
@@ -140,7 +173,7 @@ function App() {
       localStorage.removeItem('user');
       delete axios.defaults.headers.common['Authorization'];
       setCurrentUser(null);
-      setCurrentView('login');
+      navigate('/login');
       // Clear sales persons data on logout
       setSalesPersons([]);
     }
@@ -148,7 +181,7 @@ function App() {
 
   // Navigation functions
   const navigateTo = (view) => {
-    setCurrentView(view);
+    navigate(`/${view}`);
   };
 
   // Live update & remove error
@@ -237,7 +270,7 @@ function App() {
     setLoading(true);
     const token = localStorage.getItem('authToken');
 
-    fetch("http://localhost:5050/poc/save", {
+    fetch("http://10.41.11.103:5050/poc/save", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -259,8 +292,8 @@ function App() {
       .then((data) => {
         if (data && data.id) {
           setSubmittedData(data);
-          setCurrentView('confirmation');
-          
+          navigate('/confirmation');
+
           // Reset form
           setSalesPerson("");
           setRegion("");
@@ -292,47 +325,18 @@ function App() {
       });
   };
 
-  // Show loading while checking authentication
-  if (!authChecked) {
-    return <div className="loading">Loading...</div>;
-  }
+  // Protected Route component
+  const ProtectedRoute = ({ children }) => {
+    if (!authChecked) return <div className="loading">Loading...</div>;
+    if (!currentUser) return <Navigate to="/login" replace />;
+    return children;
+  };
 
-  // Render different views based on currentView state
-  const renderCurrentView = () => {
-    switch (currentView) {
-      case 'login':
-        return <LoginPage onLogin={handleLogin} />;
-      
-      case 'dashboard':
-        return (
-          <Dashboard 
-            onNavigate={navigateTo} 
-            onLogout={handleLogout} 
-            user={currentUser} 
-          />
-        );
-      
-      case 'poc-prj-id':
-        return <PocPrjId onBack={() => navigateTo('dashboard')} />;
-      
-      case 'poc-table':
-        return (
-          <PocTable 
-            onNavigate={navigateTo} 
-            onLogout={handleLogout} 
-            user={currentUser} 
-          />
-        );
-      
-      case 'initiate-poc':
-        return renderPocForm();
-      
-      case 'confirmation':
-        return renderConfirmation();
-      
-      default:
-        return <LoginPage onLogin={handleLogin} />;
-    }
+  // Public Route component (redirect to dashboard if already authenticated)
+  const PublicRoute = ({ children }) => {
+    if (!authChecked) return <div className="loading">Loading...</div>;
+    if (currentUser) return <Navigate to="/dashboard" replace />;
+    return children;
   };
 
   // Render POC Form
@@ -343,7 +347,7 @@ function App() {
           <Pageheading />
           <div className="user-info">
             <span>Welcome, {currentUser?.username}</span>
-            <button onClick={() => navigateTo('dashboard')} className="nav-btn">Dashboard</button>
+            <button onClick={() => navigate('/dashboard')} className="nav-btn">Dashboard</button>
             <button onClick={handleLogout} className="logout-btn">Logout</button>
           </div>
         </div>
@@ -502,7 +506,7 @@ function App() {
       return (
         <div className="confirmation-container">
           <h2>No submission data found</h2>
-          <Button onClick={() => navigateTo('initiate-poc')} label="Back to POC Form" />
+          <Button onClick={() => navigate('/initiate')} label="Back to POC Form" />
         </div>
       );
     }
@@ -512,13 +516,13 @@ function App() {
         <div className="header-bar">
           <span>Welcome, {currentUser?.username}</span>
           <div>
-            <button onClick={() => navigateTo('dashboard')} className="nav-btn">Dashboard</button>
+            <button onClick={() => navigate('/dashboard')} className="nav-btn">Dashboard</button>
             <button onClick={handleLogout} className="logout-btn">Logout</button>
           </div>
         </div>
 
         <h2 className="confirmation-title">✅ POC Created Successfully</h2>
-        
+
         <div className="confirmation-table-container">
           <table className="poc-table">
             <tbody>
@@ -549,21 +553,86 @@ function App() {
         </div>
 
         <div className="confirmation-buttons">
-          <Button 
+          <Button
             onClick={() => {
-              setCurrentView('initiate-poc');
-            }} 
-            label="New POC" 
+              navigate('/initiate');
+            }}
+            label="New POC"
           />
-          <Button onClick={() => navigateTo('dashboard')} label="Back to Dashboard" />
+          <Button onClick={() => navigate('/dashboard')} label="Back to Dashboard" />
         </div>
       </div>
     );
   };
 
+  if (!authChecked) {
+    return <div className="loading">Loading...</div>;
+  }
+
   return (
     <div className="app">
-      {renderCurrentView()}
+      <Routes>
+        {/* Public Route - Login */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage onLogin={handleLogin} />
+            </PublicRoute>
+          }
+        />
+
+        {/* Protected Routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/poc-table"
+          element={
+            <ProtectedRoute>
+              <PocTable
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* POC Form Route */}
+        <Route
+          path="/initiate"
+          element={
+            <ProtectedRoute>
+              {renderPocForm()}
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/confirmation"
+          element={
+            <ProtectedRoute>
+              {renderConfirmation()}
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Redirect root to login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+
+        {/* Catch all route */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     </div>
   );
 }
