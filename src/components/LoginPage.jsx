@@ -28,12 +28,12 @@ const LoginPage = ({ onLogin }) => {
         setError('');
 
         try {
-            const response = await axios.post('/poc/api/auth/login', credentials, {
-                withCredentials: true
-            });
-            // const response = await axios.post('http://localhost:5050/poc/api/auth/login', credentials, {
+            // const response = await axios.post('/poc/api/auth/login', credentials, {
             //     withCredentials: true
             // });
+            const response = await axios.post('http://localhost:5050/poc/api/auth/login', credentials, {
+                withCredentials: true
+            });
             if (response.status === 200) {
                 const { token, user } = response.data;
                 localStorage.setItem('authToken', token);

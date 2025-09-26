@@ -79,7 +79,9 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const [approvedBy, setApprovedBy] = useState(poc?.approvedBy || '');
     const [remark, setRemark] = useState(poc?.remark || '');
     const [region, setRegion] = useState(poc?.region || '');
-    const [isBillable, setIsBillable] = useState(poc?.isBillable ? 'Yes' : 'No');
+    // const [isBillable, setIsBillable] = useState(poc?.isBillable === true ? 'Yes' : 'No');
+    const [isBillable, setIsBillable] = useState(poc?.isBillable || "No");
+
     const [pocType, setPocType] = useState(poc?.pocType || '');
     const [spocEmail, setSpocEmail] = useState(poc?.spocEmail || '');
     const [spocDesignation, setSpocDesignation] = useState(poc?.spocDesignation || '');
@@ -343,7 +345,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         // Validation
         const newErrors = {};
         if (!idPrefix) newErrors.idPrefix = 'ID Prefix is required';
-        if (!pocName) newErrors.pocName = 'POC/Project Name is required';
+        if (!pocName) newErrors.pocName = 'Usecase Name is required';
         if (!entityType) newErrors.entityType = 'Client Type is required';
         if (!entityName) newErrors.entityName = 'Company Name is required';
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
@@ -354,7 +356,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         if (!endDate) newErrors.endDate = 'End Date is required';
         if (!region) newErrors.region = 'Region is required';
         if (!isBillable) newErrors.isBillable = 'Billable status is required';
-        if (!pocType) newErrors.pocType = 'POC Type is required';
+        if (!pocType) newErrors.pocType = 'Usecase Type is required';
         if (tags.length === 0) newErrors.tags = 'At least one tag is required';
         if (!status) newErrors.status = 'Status is required';
 
@@ -406,752 +408,774 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                         'Authorization': `Bearer ${token}`
                     }
                 });
-           
 
-            if (response.data.message === "POC updated successfully") {
-                alert('POC Code updated successfully!');
-                if (onSuccess) {
-                    onSuccess();
+
+                if (response.data.message && response.data.message.includes("successfully")) {
+                    alert('Usecase Code updated successfully!');
+                    if (onSuccess) {
+                        onSuccess();
+                    }
+                    onClose();
+                } else {
+                    alert('Failed to update Usecase Code: ' + (response.data.message || 'Unknown error'));
                 }
-                onClose();
-            } else {
-                alert('Failed to update POC Code: ' + (response.data.message || 'Unknown error'));
+            } catch (error) {
+                console.error('Error updating Usecase Code:', error);
+                if (error.response?.status === 401) {
+                    alert('Session expired. Please login again.');
+                } else if (error.response?.data?.message) {
+                    alert('Error updating Usecase: ' + error.response.data.message);
+                } else {
+                    alert('Error updating Usecase Code. Please try again.');
+                }
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.error('Error updating POC Code:', error);
-            if (error.response?.status === 401) {
-                alert('Session expired. Please login again.');
-            } else if (error.response?.data?.message) {
-                alert('Error updating POC: ' + error.response.data.message);
-            } else {
-                alert('Error updating POC Code. Please try again.');
-            }
-        } finally {
-            setLoading(false);
         }
-    }
-};
-const handleTagSelect = (tag) => {
-    if (!tags.includes(tag)) {
-        setTags([...tags, tag]);
-        if (errors.tags) {
-            setErrors({ ...errors, tags: null });
+    };
+    const handleTagSelect = (tag) => {
+        if (!tags.includes(tag)) {
+            setTags([...tags, tag]);
+            if (errors.tags) {
+                setErrors({ ...errors, tags: null });
+            }
         }
-    }
-};
+    };
 
-const removeTag = (tagToRemove) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
-};
+    const removeTag = (tagToRemove) => {
+        setTags(tags.filter(tag => tag !== tagToRemove));
+    };
 
-const handleNextStep = () => {
-    // Validate current step before proceeding
-    let stepValid = true;
-    const newErrors = {};
+    const handleNextStep = () => {
+        // Validate current step before proceeding
+        let stepValid = true;
+        const newErrors = {};
 
-    switch (activeStep) {
-        case 0:
-            if (!idPrefix) {
-                newErrors.idPrefix = 'ID Prefix is required';
-                stepValid = false;
-            }
-            if (!pocName) {
-                newErrors.pocName = 'POC/Project Name is required';
-                stepValid = false;
-            }
-            break;
-        case 1:
-            if (!entityType) {
-                newErrors.entityType = 'Client Type is required';
-                stepValid = false;
-            }
-            if (!entityName) {
-                newErrors.entityName = 'Company Name is required';
-                stepValid = false;
-            }
-            if (entityType === 'Partner' && !partnerName) {
-                newErrors.partnerName = 'Partner Name is required';
-                stepValid = false;
-            }
-            if (!salesPerson) {
-                newErrors.salesPerson = 'Sales Person is required';
-                stepValid = false;
-            }
-            if (!region) {
-                newErrors.region = 'Region is required';
-                stepValid = false;
-            }
-            break;
-        case 2:
-            if (assignedTo.length === 0) {
-                newErrors.assignedTo = 'At least one user must be assigned';
-                stepValid = false;
-            }
-            if (!isBillable) {
-                newErrors.isBillable = 'Billable status is required';
-                stepValid = false;
-            }
-            if (!startDate) {
-                newErrors.startDate = 'Start Date is required';
-                stepValid = false;
-            }
-            if (!endDate) {
-                newErrors.endDate = 'End Date is required';
-                stepValid = false;
-            }
-            break;
-        case 3:
-            if (!pocType) {
-                newErrors.pocType = 'POC Type is required';
-                stepValid = false;
-            }
-            if (tags.length === 0) {
-                newErrors.tags = 'At least one tag is required';
-                stepValid = false;
-            }
-            if (!status) {
-                newErrors.status = 'Status is required';
-                stepValid = false;
-            }
-            break;
-        default:
-            break;
-    }
+        switch (activeStep) {
+            case 0:
+                if (!idPrefix) {
+                    newErrors.idPrefix = 'ID Prefix is required';
+                    stepValid = false;
+                }
+                if (!pocName) {
+                    newErrors.pocName = 'Usecase Name is required';
+                    stepValid = false;
+                }
+                break;
+            case 1:
+                if (!entityType) {
+                    newErrors.entityType = 'Client Type is required';
+                    stepValid = false;
+                }
+                if (!entityName) {
+                    newErrors.entityName = 'Company Name is required';
+                    stepValid = false;
+                }
+                if (entityType === 'Partner' && !partnerName) {
+                    newErrors.partnerName = 'Partner Name is required';
+                    stepValid = false;
+                }
+                if (!salesPerson) {
+                    newErrors.salesPerson = 'Sales Person is required';
+                    stepValid = false;
+                }
+                if (!region) {
+                    newErrors.region = 'Region is required';
+                    stepValid = false;
+                }
+                break;
+            case 2:
+                if (assignedTo.length === 0) {
+                    newErrors.assignedTo = 'At least one user must be assigned';
+                    stepValid = false;
+                }
+                if (!isBillable) {
+                    newErrors.isBillable = 'Billable status is required';
+                    stepValid = false;
+                }
+                if (!startDate) {
+                    newErrors.startDate = 'Start Date is required';
+                    stepValid = false;
+                }
+                if (!endDate) {
+                    newErrors.endDate = 'End Date is required';
+                    stepValid = false;
+                }
+                break;
+            case 3:
+                if (!pocType) {
+                    newErrors.pocType = 'Usecase Type is required';
+                    stepValid = false;
+                }
+                if (tags.length === 0) {
+                    newErrors.tags = 'At least one tag is required';
+                    stepValid = false;
+                }
+                if (!status) {
+                    newErrors.status = 'Status is required';
+                    stepValid = false;
+                }
+                break;
+            default:
+                break;
+        }
 
-    if (!stepValid) {
-        setErrors({ ...errors, ...newErrors });
-        return;
-    }
+        if (!stepValid) {
+            setErrors({ ...errors, ...newErrors });
+            return;
+        }
 
-    setActiveStep((prev) => prev + 1);
-};
+        setActiveStep((prev) => prev + 1);
+    };
 
-const handleBackStep = () => {
-    setActiveStep((prev) => prev - 1);
-};
+    const handleBackStep = () => {
+        setActiveStep((prev) => prev - 1);
+    };
 
-const steps = ['Basic Information', 'Client Details', 'Team & Timeline', 'Additional Information'];
+    const steps = ['Basic Information', 'Client Details', 'Team & Timeline', 'Additional Information'];
 
-const renderStepContent = (step) => {
-    switch (step) {
-        case 0:
-            return (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+    const renderStepContent = (step) => {
+        switch (step) {
+            case 0:
+                return (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                            {/* Usecase ID - Display only */}
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Usecase ID
+                                </Typography>
+                                <Box sx={{
+                                    padding: '8px 12px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#f5f5f5',
+                                    minHeight: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    fontSize: '14px'
+                                }}>
+                                    {pocId || 'N/A'}
+                                </Box>
+                            </Box>
+
+                            {/* Usecase Type - Display only */}
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Usecase Type
+                                </Typography>
+                                <Box sx={{
+                                    padding: '8px 12px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#f5f5f5',
+                                    minHeight: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    fontSize: '14px'
+                                }}>
+                                    {idPrefix || 'N/A'}
+                                </Box>
+                            </Box>
+                        </Box>
+
                         <TextInput
-                            label="POC/Project ID"
-                            value={pocId}
-                            onChange={setPocId}
-                            error={errors.pocId}
-                            placeholder="POC/Project ID"
+                            label="Usecase Name"
+                            value={pocName}
+                            onChange={setPocName}
+                            error={errors.pocName}
+                            placeholder="Enter Usecase Name"
                             required
-                            disabled={true}
-                            icon={<AssignmentIcon />}
+                            icon={<WorkIcon />}
                         />
 
-                        <Dropdown
-                            label="Usecase Type"
-                            options={idPrefixOptions}
-                            value={idPrefix}
-                            onChange={setIdPrefix}
-                            error={errors.idPrefix}
-                            placeholder="Select ID Prefix"
-                            required
-                            icon={<AssignmentIcon />}
-                            disabled={true}
+                        <TextInput
+                            label="Description"
+                            value={description}
+                            onChange={setDescription}
+                            placeholder="Enter Description"
+                            multiline
+                            rows={6}
+                            fullWidth
+                            icon={<DescriptionIcon />}
+                            sx={{ minHeight: "150px" }}
                         />
                     </Box>
+                );
 
-                    <TextInput
-                        label="Usecase Name"
-                        value={pocName}
-                        onChange={setPocName}
-                        error={errors.pocName}
-                        placeholder="Enter POC/Project Name"
-                        required
-                        icon={<WorkIcon />}
-                    />
-
-                    <TextInput
-                        label="Description"
-                        value={description}
-                        onChange={setDescription}
-                        placeholder="Enter Description"
-                        multiline
-                        rows={6}
-                        fullWidth
-                        icon={<DescriptionIcon />}
-                        sx={{ minHeight: "150px" }}
-                    />
-                </Box>
-            );
-
-        case 1:
-            return (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
-                        <Dropdown
-                            label="Client Type"
-                            options={["Partner", "Client", "Internal"]}
-                            value={entityType}
-                            onChange={setEntityType}
-                            error={errors.entityType}
-                            placeholder="Select Client Type"
-                            required
-                            icon={<BusinessIcon />}
-                        />
-
-                        <TextInput
-                            label="End Client Name"
-                            value={entityName}
-                            onChange={setEntityName}
-                            error={errors.entityName}
-                            placeholder="Enter Company Name"
-                            required
-                            icon={<BusinessIcon />}
-                        />
-
-                        {entityType === "Partner" && (
-                            <TextInput
-                                label="Partner Name"
-                                value={partnerName}
-                                onChange={setPartnerName}
-                                error={errors.partnerName}
-                                placeholder="Enter Partner Name"
+            case 1:
+                return (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+                            <Dropdown
+                                label="Client Type"
+                                options={["Partner", "Client", "Internal"]}
+                                value={entityType}
+                                onChange={setEntityType}
+                                error={errors.entityType}
+                                placeholder="Select Client Type"
                                 required
                                 icon={<BusinessIcon />}
                             />
-                        )}
-                    </Box>
 
-                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
-                        <Dropdown
-                            label="Sales Person"
-                            options={salesPersons}
-                            value={salesPerson}
-                            onChange={setSalesPerson}
-                            error={errors.salesPerson}
-                            placeholder="Choose Sales Person"
-                            required
-                            loading={apiLoading}
-                            icon={<PersonIcon />}
-                        />
-
-                        <Dropdown
-                            label="Region"
-                            options={regions}
-                            value={region}
-                            onChange={setRegion}
-                            error={errors.region}
-                            placeholder="Select Region"
-                            required
-                            icon={<LocationIcon />}
-                        />
-
-                        <TextInput
-                            label="SPOC Email Address"
-                            value={spocEmail}
-                            onChange={setSpocEmail}
-                            placeholder="Enter SPOC Email"
-                            type="email"
-                            icon={<EmailIcon />}
-                        />
-                    </Box>
-
-                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
-                        <TextInput
-                            label="SPOC Designation"
-                            value={spocDesignation}
-                            onChange={setSpocDesignation}
-                            placeholder="Enter SPOC Designation"
-                            icon={<PersonIcon />}
-                        />
-                    </Box>
-                </Box>
-            );
-
-        case 2:
-            return (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                            Assigned To *
-                        </Typography>
-                        <Button
-                            variant="outlined"
-                            onClick={handleOpenUserDialog}
-                            startIcon={<GroupIcon />}
-                            fullWidth
-                            sx={{ justifyContent: 'flex-start', mb: 1 }}
-                        >
-                            Select Team Members ({assignedTo.length} selected)
-                        </Button>
-                        {errors.assignedTo && (
-                            <Typography variant="caption" color="error">
-                                {errors.assignedTo}
-                            </Typography>
-                        )}
-
-                        {assignedTo.length > 0 && (
-                            <Box sx={{ mt: 1 }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    Selected team members:
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                                    {assignedTo.map(user => (
-                                        <Chip
-                                            key={user}
-                                            label={user}
-                                            size="small"
-                                            onDelete={() => setAssignedTo(prev => prev.filter(u => u !== user))}
-                                            avatar={<Avatar sx={{ width: 24, height: 24 }}>{user.charAt(0)}</Avatar>}
-                                        />
-                                    ))}
-                                </Box>
-                            </Box>
-                        )}
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <Dropdown
-                            label="Created By"
-                            options={createdByOptions}
-                            value={createdBy}
-                            onChange={setCreatedBy}
-                            error={errors.createdBy}
-                            placeholder="Select Creator"
-                            required
-                            loading={apiLoading}
-                            icon={<PersonIcon />}
-                        />
-
-                        <Dropdown
-                            label="Is Billable"
-                            options={['Yes', 'No']}
-                            value={isBillable}
-                            onChange={setIsBillable}
-                            error={errors.isBillable}
-                            placeholder="Select Billable Status"
-                            required
-                            icon={<MoneyIcon />}
-                        />
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <Box>
-                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                Start Date *
-                            </Typography>
-                            <input
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className={errors.startDate ? 'error' : ''}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: errors.startDate ? '2px solid #d32f2f' : '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
-                                }}
+                            <TextInput
+                                label="End Client Name"
+                                value={entityName}
+                                onChange={setEntityName}
+                                error={errors.entityName}
+                                placeholder="Enter Company Name"
+                                required
+                                icon={<BusinessIcon />}
                             />
-                            {errors.startDate && (
-                                <Typography variant="caption" color="error">
-                                    {errors.startDate}
-                                </Typography>
-                            )}
-                        </Box>
 
-                        <Box>
-                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                End Date *
-                            </Typography>
-                            <input
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                className={errors.endDate ? 'error' : ''}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: errors.endDate ? '2px solid #d32f2f' : '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
-                                }}
-                            />
-                            {errors.endDate && (
-                                <Typography variant="caption" color="error">
-                                    {errors.endDate}
-                                </Typography>
-                            )}
-                        </Box>
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <Box>
-                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                Actual Start Date
-                            </Typography>
-                            <input
-                                type="date"
-                                value={actualStartDate}
-                                onChange={(e) => setActualStartDate(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
-                                }}
-                            />
-                        </Box>
-
-                        <Box>
-                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                Actual End Date
-                            </Typography>
-                            <input
-                                type="date"
-                                value={actualEndDate}
-                                onChange={(e) => setActualEndDate(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
-                                }}
-                            />
-                        </Box>
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <TextInput
-                            label="Estimated Efforts"
-                            value={estimatedEfforts}
-                            onChange={setEstimatedEfforts}
-                            placeholder="Enter estimated efforts"
-                            type="number"
-                            icon={<WorkIcon />}
-                        />
-
-                        <TextInput
-                            label="Total Efforts"
-                            value={totalEfforts}
-                            onChange={setTotalEfforts}
-                            placeholder="Enter total efforts"
-                            type="number"
-                            icon={<WorkIcon />}
-                        />
-                    </Box>
-
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <TextInput
-                            label="Variance Days"
-                            value={varianceDays}
-                            onChange={setVarianceDays}
-                            placeholder="Enter variance days"
-                            type="number"
-                            icon={<CalendarIcon />}
-                        />
-
-                        <Dropdown
-                            label="Approved By"
-                            options={approverOptions}
-                            value={approvedBy}
-                            onChange={setApprovedBy}
-                            placeholder="Select Approver"
-                            loading={apiLoading}
-                            icon={<PersonIcon />}
-                        />
-                    </Box>
-                </Box>
-            );
-
-        case 3:
-            return (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <Dropdown
-                            label="POC Type"
-                            options={[
-                                'POC',
-                                'POP',
-                                'Partner Support',
-                                'Feasibility Check',
-                                'Operational Support',
-                                'R&D',
-                                'Solution Consultation',
-                                'Efforts Estimation',
-                                'Task',
-                                'Demo',
-                                'Internal',
-                                'Event',
-                                'Workshop',
-                                'Support'
-                            ]}
-                            value={pocType}
-                            onChange={setPocType}
-                            error={errors.pocType}
-                            placeholder="Select POC Type"
-                            required
-                            icon={<AssignmentIcon />}
-                        />
-
-                        <Box>
-                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                Tags *
-                            </Typography>
-                            <Box sx={{
-                                border: errors.tags ? '2px solid #d32f2f' : '1px solid #ccc',
-                                borderRadius: '4px',
-                                p: 1,
-                                minHeight: '56px'
-                            }}>
-                                <Dropdown
-                                    options={tagOptions}
-                                    value=""
-                                    onChange={handleTagSelect}
-                                    placeholder="Select Tags"
-                                    showLabel={false}
-                                    icon={<LabelIcon />}
+                            {entityType === "Partner" && (
+                                <TextInput
+                                    label="Partner Name"
+                                    value={partnerName}
+                                    onChange={setPartnerName}
+                                    error={errors.partnerName}
+                                    placeholder="Enter Partner Name"
+                                    required
+                                    icon={<BusinessIcon />}
                                 />
-                                {tags.length > 0 && (
+                            )}
+                        </Box>
+
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+                            <Dropdown
+                                label="Sales Person"
+                                options={salesPersons}
+                                value={salesPerson}
+                                onChange={setSalesPerson}
+                                error={errors.salesPerson}
+                                placeholder="Choose Sales Person"
+                                required
+                                loading={apiLoading}
+                                icon={<PersonIcon />}
+                            />
+
+                            <Dropdown
+                                label="Region"
+                                options={regions}
+                                value={region}
+                                onChange={setRegion}
+                                error={errors.region}
+                                placeholder="Select Region"
+                                required
+                                icon={<LocationIcon />}
+                            />
+
+                            <TextInput
+                                label="SPOC Email Address"
+                                value={spocEmail}
+                                onChange={setSpocEmail}
+                                placeholder="Enter SPOC Email"
+                                type="email"
+                                icon={<EmailIcon />}
+                            />
+                        </Box>
+
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+                            <TextInput
+                                label="SPOC Designation"
+                                value={spocDesignation}
+                                onChange={setSpocDesignation}
+                                placeholder="Enter SPOC Designation"
+                                icon={<PersonIcon />}
+                            />
+                        </Box>
+                    </Box>
+                );
+
+            case 2:
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <Box>
+                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                Assigned To *
+                            </Typography>
+                            <Button
+                                variant="outlined"
+                                onClick={handleOpenUserDialog}
+                                startIcon={<GroupIcon />}
+                                fullWidth
+                                sx={{ justifyContent: 'flex-start', mb: 1 }}
+                            >
+                                Select Team Members ({assignedTo.length} selected)
+                            </Button>
+                            {errors.assignedTo && (
+                                <Typography variant="caption" color="error">
+                                    {errors.assignedTo}
+                                </Typography>
+                            )}
+
+                            {assignedTo.length > 0 && (
+                                <Box sx={{ mt: 1 }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Selected team members:
+                                    </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                                        {tags.map(tag => (
+                                        {assignedTo.map(user => (
                                             <Chip
-                                                key={tag}
-                                                label={tag}
+                                                key={user}
+                                                label={user}
                                                 size="small"
-                                                onDelete={() => removeTag(tag)}
-                                                color="primary"
-                                                variant="outlined"
+                                                onDelete={() => setAssignedTo(prev => prev.filter(u => u !== user))}
+                                                avatar={<Avatar sx={{ width: 24, height: 24 }}>{user.charAt(0)}</Avatar>}
                                             />
                                         ))}
                                     </Box>
-                                )}
-                            </Box>
-                            {errors.tags && (
-                                <Typography variant="caption" color="error">
-                                    {errors.tags}
-                                </Typography>
+                                </Box>
                             )}
                         </Box>
-                    </Box>
 
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                        <TextInput
-                            label="Remark"
-                            value={remark}
-                            onChange={setRemark}
-                            placeholder="Enter Remarks"
-                            multiline
-                            rows={3}
-                            icon={<DescriptionIcon />}
-                        />
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            {/* Created By - Display only */}
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Created By
+                                </Typography>
+                                <Box sx={{
+                                    padding: '8px 12px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#f5f5f5',
+                                    minHeight: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    fontSize: '14px'
+                                }}>
+                                    {createdBy || 'N/A'}
+                                </Box>
+                            </Box>
 
-                        <Dropdown
-                            label="Status"
-                            options={['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled', 'Awaiting', 'Hold', 'Closed', 'Converted']}
-                            value={status}
-                            onChange={setStatus}
-                            error={errors.status}
-                            placeholder="Select Status"
-                            required
-                            icon={<CheckCircleIcon />}
-                        />
-                    </Box>
+                            <Dropdown
+                                label="Is Billable"
+                                options={['Yes', 'No']}
+                                value={isBillable}
+                                onChange={setIsBillable}
+                                error={errors.isBillable}
+                                placeholder="Select Billable Status"
+                                required
+                                icon={<MoneyIcon />}
+                            />
+                        </Box>
 
-                    {/* Submit button on the last page */}
-                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            loading={loading}
-                            disabled={apiLoading}
-                            onClick={handleSubmit}
-                            startIcon={<CheckCircleIcon />}
-                            sx={{
-                                backgroundColor: '#1976d2',
-                                '&:hover': {
-                                    backgroundColor: '#1565c0'
-                                },
-                                minWidth: '200px'
-                            }}
-                        >
-                            {loading ? 'Updating Usecase...' : 'Update Usecase'}
-                        </Button>
-                    </Box>
-                </Box>
-            );
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Start Date *
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className={errors.startDate ? 'error' : ''}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: errors.startDate ? '2px solid #d32f2f' : '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                                {errors.startDate && (
+                                    <Typography variant="caption" color="error">
+                                        {errors.startDate}
+                                    </Typography>
+                                )}
+                            </Box>
 
-        default:
-            return null;
-    }
-};
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    End Date *
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className={errors.endDate ? 'error' : ''}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: errors.endDate ? '2px solid #d32f2f' : '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                                {errors.endDate && (
+                                    <Typography variant="caption" color="error">
+                                        {errors.endDate}
+                                    </Typography>
+                                )}
+                            </Box>
+                        </Box>
 
-return (
-    <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Header with close button */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <img
-                    src={companyLogo}
-                    alt="Company Logo"
-                    style={{ height: '40px' }}
-                />
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Actual Start Date
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={actualStartDate}
+                                    onChange={(e) => setActualStartDate(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                            </Box>
 
-            </Box>
-            <IconButton onClick={onClose} aria-label="close">
-                <CloseIcon />
-            </IconButton>
-        </Box>
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Actual End Date
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={actualEndDate}
+                                    onChange={(e) => setActualEndDate(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                            </Box>
+                        </Box>
 
-        {/* Stepper */}
-        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-            {steps.map((label) => (
-                <Step key={label}>
-                    <StepLabel>{label}</StepLabel>
-                </Step>
-            ))}
-        </Stepper>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <TextInput
+                                label="Estimated Efforts"
+                                value={estimatedEfforts}
+                                onChange={setEstimatedEfforts}
+                                placeholder="Enter estimated efforts"
+                                type="number"
+                                icon={<WorkIcon />}
+                            />
 
-        {/* Form content */}
-        <Paper sx={{ p: 3, flex: 1, overflow: 'auto', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-            <form onSubmit={handleSubmit}>
-                {apiLoading ? (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                        <CircularProgress />
-                        <Typography variant="body2" sx={{ mt: 2 }}>
-                            Loading form data...
-                        </Typography>
-                    </Box>
-                ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {renderStepContent(activeStep)}
+                            <TextInput
+                                label="Total Efforts"
+                                value={totalEfforts}
+                                onChange={setTotalEfforts}
+                                placeholder="Enter total efforts"
+                                type="number"
+                                icon={<WorkIcon />}
+                            />
+                        </Box>
 
-                        {/* Navigation buttons */}
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-                            <Button
-                                variant="outlined"
-                                onClick={handleBackStep}
-                                disabled={activeStep === 0}
-                                startIcon={<RemoveIcon />}
-                            >
-                                Back
-                            </Button>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <TextInput
+                                label="Variance Days"
+                                value={varianceDays}
+                                onChange={setVarianceDays}
+                                placeholder="Enter variance days"
+                                type="number"
+                                icon={<CalendarIcon />}
+                            />
 
-                            {activeStep < steps.length - 1 ? (
-                                <Button
-                                    variant="contained"
-                                    onClick={handleNextStep}
-                                    endIcon={<AddIcon />}
-                                >
-                                    Next
-                                </Button>
-                            ) : null}
+                            <Dropdown
+                                label="Approved By"
+                                options={approverOptions}
+                                value={approvedBy}
+                                onChange={setApprovedBy}
+                                placeholder="Select Approver"
+                                loading={apiLoading}
+                                icon={<PersonIcon />}
+                            />
                         </Box>
                     </Box>
-                )}
-            </form>
-        </Paper>
+                );
 
-        {/* Submit button - Always visible at the bottom */}
-        {activeStep !== 3 && (
-            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                <Button
-                    type="submit"
-                    variant="contained"
-                    loading={loading}
-                    disabled={apiLoading}
-                    onClick={handleSubmit}
-                    startIcon={<CheckCircleIcon />}
-                    sx={{
-                        backgroundColor: '#1976d2',
-                        '&:hover': {
-                            backgroundColor: '#1565c0'
-                        },
-                        minWidth: '200px'
-                    }}
-                >
-                    {loading ? 'Updating Usecase...' : 'Update Usecase'}
-                </Button>
+            case 3:
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Dropdown
+                                label="Usecase Type"
+                                options={[
+                                    'POC',
+                                    'POP',
+                                    'Partner Support',
+                                    'Feasibility Check',
+                                    'Operational Support',
+                                    'R&D',
+                                    'Solution Consultation',
+                                    'Efforts Estimation',
+                                    'Task',
+                                    'Demo',
+                                    'Internal',
+                                    'Event',
+                                    'Workshop',
+                                    'Support'
+                                ]}
+                                value={pocType}
+                                onChange={setPocType}
+                                error={errors.pocType}
+                                placeholder="Select Usecase Type"
+                                required
+                                icon={<AssignmentIcon />}
+                            />
+
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Tags *
+                                </Typography>
+                                <Box sx={{
+                                    border: errors.tags ? '2px solid #d32f2f' : '1px solid #ccc',
+                                    borderRadius: '4px',
+                                    p: 1,
+                                    minHeight: '56px'
+                                }}>
+                                    <Dropdown
+                                        options={tagOptions}
+                                        value=""
+                                        onChange={handleTagSelect}
+                                        placeholder="Select Tags"
+                                        showLabel={false}
+                                        icon={<LabelIcon />}
+                                    />
+                                    {tags.length > 0 && (
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                                            {tags.map(tag => (
+                                                <Chip
+                                                    key={tag}
+                                                    label={tag}
+                                                    size="small"
+                                                    onDelete={() => removeTag(tag)}
+                                                    color="primary"
+                                                    variant="outlined"
+                                                />
+                                            ))}
+                                        </Box>
+                                    )}
+                                </Box>
+                                {errors.tags && (
+                                    <Typography variant="caption" color="error">
+                                        {errors.tags}
+                                    </Typography>
+                                )}
+                            </Box>
+                        </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <TextInput
+                                label="Remark"
+                                value={remark}
+                                onChange={setRemark}
+                                placeholder="Enter Remarks"
+                                multiline
+                                rows={3}
+                                icon={<DescriptionIcon />}
+                            />
+
+                            <Dropdown
+                                label="Status"
+                                options={['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled', 'Awaiting', 'Hold', 'Closed', 'Converted']}
+                                value={status}
+                                onChange={setStatus}
+                                error={errors.status}
+                                placeholder="Select Status"
+                                required
+                                icon={<CheckCircleIcon />}
+                            />
+                        </Box>
+
+                        {/* Submit button on the last page */}
+                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                loading={loading}
+                                disabled={apiLoading}
+                                onClick={handleSubmit}
+                                startIcon={<CheckCircleIcon />}
+                                sx={{
+                                    backgroundColor: '#1976d2',
+                                    '&:hover': {
+                                        backgroundColor: '#1565c0'
+                                    },
+                                    minWidth: '200px'
+                                }}
+                            >
+                                {loading ? 'Updating Usecase...' : 'Update Usecase'}
+                            </Button>
+                        </Box>
+                    </Box>
+                );
+
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Header with close button */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <img
+                        src={companyLogo}
+                        alt="Company Logo"
+                        style={{ height: '40px' }}
+                    />
+
+                </Box>
+                <IconButton onClick={onClose} aria-label="close">
+                    <CloseIcon />
+                </IconButton>
             </Box>
-        )}
 
-        {/* Multi-User Selection Dialog */}
-        <Dialog
-            open={userDialogOpen}
-            onClose={handleCloseUserDialog}
-            maxWidth="sm"
-            fullWidth
-            PaperProps={{ sx: { borderRadius: 3 } }}
-        >
-            <DialogTitle sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-            }}>
-                <GroupIcon />
-                Select Team Members
-            </DialogTitle>
-            <DialogContent dividers sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Button size="small" onClick={handleSelectAllUsers}>
-                        Select All
-                    </Button>
-                    <Button size="small" onClick={handleDeselectAllUsers}>
-                        Deselect All
+            {/* Stepper */}
+            <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+                {steps.map((label) => (
+                    <Step key={label}>
+                        <StepLabel>{label}</StepLabel>
+                    </Step>
+                ))}
+            </Stepper>
+
+            {/* Form content */}
+            <Paper sx={{ p: 3, flex: 1, overflow: 'auto', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+                <form onSubmit={handleSubmit}>
+                    {apiLoading ? (
+                        <Box sx={{ textAlign: 'center', py: 4 }}>
+                            <CircularProgress />
+                            <Typography variant="body2" sx={{ mt: 2 }}>
+                                Loading form data...
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {renderStepContent(activeStep)}
+
+                            {/* Navigation buttons */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+                                <Button
+                                    variant="outlined"
+                                    onClick={handleBackStep}
+                                    disabled={activeStep === 0}
+                                    startIcon={<RemoveIcon />}
+                                >
+                                    Back
+                                </Button>
+
+                                {activeStep < steps.length - 1 ? (
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleNextStep}
+                                        endIcon={<AddIcon />}
+                                    >
+                                        Next
+                                    </Button>
+                                ) : null}
+                            </Box>
+                        </Box>
+                    )}
+                </form>
+            </Paper>
+
+            {/* Submit button - Always visible at the bottom */}
+            {activeStep !== 3 && (
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        loading={loading}
+                        disabled={apiLoading}
+                        onClick={handleSubmit}
+                        startIcon={<CheckCircleIcon />}
+                        sx={{
+                            backgroundColor: '#1976d2',
+                            '&:hover': {
+                                backgroundColor: '#1565c0'
+                            },
+                            minWidth: '200px'
+                        }}
+                    >
+                        {loading ? 'Updating Usecase...' : 'Update Usecase'}
                     </Button>
                 </Box>
+            )}
 
-                <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                    {users.map((user, index) => (
-                        <ListItem key={`${user}-${index}`} disablePadding>
-                            <ListItemButton onClick={() => handleToggleUser(user)}>
-                                <ListItemIcon>
-                                    <Checkbox
-                                        edge="start"
-                                        checked={selectedUsers.includes(user)}
-                                        tabIndex={-1}
-                                        disableRipple
-                                    />
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary={user}
-                                    secondary={`${user.toLowerCase()}@company.com`}
-                                />
-                                <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                                    {user.charAt(0).toUpperCase()}
-                                </Avatar>
-                            </ListItemButton>
-                        </ListItem>
-                    ))}
-                </List>
-
-                {selectedUsers.length > 0 && (
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
-                            Selected: {selectedUsers.join(', ')}
-                        </Typography>
+            {/* Multi-User Selection Dialog */}
+            <Dialog
+                open={userDialogOpen}
+                onClose={handleCloseUserDialog}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
+            >
+                <DialogTitle sx={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                }}>
+                    <GroupIcon />
+                    Select Team Members
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                        <Button size="small" onClick={handleSelectAllUsers}>
+                            Select All
+                        </Button>
+                        <Button size="small" onClick={handleDeselectAllUsers}>
+                            Deselect All
+                        </Button>
                     </Box>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={handleCloseUserDialog}>Cancel</Button>
-                <Button
-                    onClick={handleSaveUsers}
-                    variant="contained"
-                    disabled={selectedUsers.length === 0}
-                >
-                    Save ({selectedUsers.length})
-                </Button>
-            </DialogActions>
-        </Dialog>
-    </Box>
-);
+
+                    <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+                        {users.map((user, index) => (
+                            <ListItem key={`${user}-${index}`} disablePadding>
+                                <ListItemButton onClick={() => handleToggleUser(user)}>
+                                    <ListItemIcon>
+                                        <Checkbox
+                                            edge="start"
+                                            checked={selectedUsers.includes(user)}
+                                            tabIndex={-1}
+                                            disableRipple
+                                        />
+                                    </ListItemIcon>
+                                    <ListItemText
+                                        primary={user}
+                                        secondary={`${user.toLowerCase()}@company.com`}
+                                    />
+                                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                                        {user.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                    </List>
+
+                    {selectedUsers.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Selected: {selectedUsers.join(', ')}
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseUserDialog}>Cancel</Button>
+                    <Button
+                        onClick={handleSaveUsers}
+                        variant="contained"
+                        disabled={selectedUsers.length === 0}
+                    >
+                        Save ({selectedUsers.length})
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>
+    );
 };
 
 export default PocPrjIdEdit;

@@ -51,7 +51,7 @@ import {
     ViewColumn as ViewColumnIcon,
     FilterList as FilterListIcon,
     Clear as ClearIcon,
-    Close as CloseIcon 
+    Close as CloseIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -408,10 +408,10 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
 
             // Remove the deleted item from local state
             setPocData(prevData => prevData.filter(item => item.pocId !== pocToDelete.pocId));
-            showSnackbar('POC record deleted successfully', 'success');
+            showSnackbar('Usecase record deleted successfully', 'success');
         } catch (error) {
-            console.error('Error deleting POC:', error);
-            showSnackbar('Failed to delete POC record', 'error');
+            console.error('Error deleting Usecase:', error);
+            showSnackbar('Failed to delete Usecase record', 'error');
         } finally {
             setDeleteConfirmOpen(false);
             setPocToDelete(null);
@@ -432,18 +432,18 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     };
 
     const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-        case 'completed': return 'success';
-        case 'in progress': return 'warning';
-        case 'pending': return 'default';
-        case 'cancelled': return 'error';
-        case 'draft': return 'secondary';
-        case 'awaiting': return 'info';
-        case 'hold': return 'secondary';
-        case 'closed': return 'error';
-        case 'converted': return 'success';
-        default: return 'default';
-    }
+        switch (status?.toLowerCase()) {
+            case 'completed': return 'success';
+            case 'in progress': return 'warning';
+            case 'pending': return 'default';
+            case 'cancelled': return 'error';
+            case 'draft': return 'secondary';
+            case 'awaiting': return 'info';
+            case 'hold': return 'secondary';
+            case 'closed': return 'error';
+            case 'converted': return 'success';
+            default: return 'default';
+        }
     };
 
     const getBillableChip = (isBillable) => {
@@ -613,6 +613,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setStatusMenuAnchor(null);
     };
 
+
+
     // Update the status column configuration in columnConfig
     const columnConfig = {
         pocId: {
@@ -662,7 +664,56 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Box>
             )
         },
-        remark: { label: 'Remark', truncate: 20 },
+        remark: {
+            label: 'Remark',
+            truncate: 20,
+            render: (poc) => (
+                editingRemark?.pocId === poc.pocId ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TextField
+                            size="small"
+                            value={remarkText}
+                            onChange={(e) => setRemarkText(e.target.value)}
+                            placeholder="Enter remark..."
+                            sx={{ width: 150 }}
+                        />
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleRemarkUpdate(poc, remarkText)}
+                                disabled={!remarkText.trim()}
+                            >
+                                ✓
+                            </IconButton>
+                            <IconButton
+                                size="small"
+                                color="error"
+                                onClick={handleCancelEditRemark}
+                            >
+                                ✕
+                            </IconButton>
+                        </Box>
+                    </Box>
+                ) : (
+                    <Tooltip title={poc.remark || 'Click to add remark'}>
+                        <Box
+                            onClick={() => handleStartEditRemark(poc)}
+                            sx={{
+                                cursor: 'pointer',
+                                padding: '4px 8px',
+                                borderRadius: 1,
+                                '&:hover': {
+                                    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                                }
+                            }}
+                        >
+                            {poc.remark ? truncateText(poc.remark, 20) : 'Add Remark'}
+                        </Box>
+                    </Tooltip>
+                )
+            )
+        },
         entityType: { label: 'Client Type', truncate: false },
         entityName: { label: 'Company Name', truncate: 15 },
         salesPerson: { label: 'Sales Person', truncate: false },
@@ -680,19 +731,53 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         varianceDays: { label: 'Variance Days', truncate: false }
     };
 
-    //     const getStatusColor = (status) => {
-    //     switch (status?.toLowerCase()) {
-    //         case 'completed': return 'success';
-    //         case 'in progress': return 'warning';
-    //         case 'pending': return 'default';
-    //         case 'cancelled': return 'error';
-    //         case 'draft': return 'secondary';
-    //         default: return 'default';
-    //     }
-    // };
 
 
 
+    const [editingRemark, setEditingRemark] = React.useState(null);
+    const [remarkText, setRemarkText] = React.useState('');
+
+    // Function to handle remark update
+    const handleRemarkUpdate = async (poc, newRemark) => {
+        try {
+            const token = localStorage.getItem('authToken');
+            await axios.put(`http://localhost:5050/poc/updateRemark/${poc.pocId}`,
+                { remark: newRemark },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            // Update local state
+            setPocData(prevData =>
+                prevData.map(item =>
+                    item.pocId === poc.pocId ? { ...item, remark: newRemark } : item
+                )
+            );
+
+            setEditingRemark(null);
+            setRemarkText('');
+            showSnackbar('Remark updated successfully', 'success');
+        } catch (error) {
+            console.error('Error updating remark:', error);
+            showSnackbar('Failed to update remark', 'error');
+        }
+    };
+
+    // Function to start editing remark
+    const handleStartEditRemark = (poc) => {
+        setEditingRemark(poc);
+        setRemarkText(poc.remark || '');
+    };
+
+    // Function to cancel editing remark
+    const handleCancelEditRemark = () => {
+        setEditingRemark(null);
+        setRemarkText('');
+    };
 
 
     return (
@@ -746,7 +831,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <TextField
-                                placeholder="Search POC codes..."
+                                placeholder="Search Usecase codes..."
                                 variant="outlined"
                                 size="small"
                                 value={searchTerm}
@@ -803,7 +888,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                     <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         {loading ? (
                             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
-                                <Typography>Loading POC data...</Typography>
+                                <Typography>Loading Usecase data...</Typography>
                             </Box>
                         ) : (
                             <>
@@ -856,7 +941,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                     <TableCell colSpan={Object.keys(visibleColumns).filter(k => visibleColumns[k]).length + 1} align="center" sx={{ py: 3 }}>
                                                         <Typography variant="body1" color="textSecondary">
                                                             {searchTerm || Object.values(columnFilters).some(f => f)
-                                                                ? 'No matching POC codes found'
+                                                                ? 'No matching Usecase codes found'
                                                                 : 'No Usecase codes available. Click "Create Usecase" to get started.'}
                                                         </Typography>
                                                     </TableCell>
@@ -939,7 +1024,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                     bgcolor: alpha(theme.palette.primary.main, 0.03)
                                 }}>
                                     <Typography variant="body2" color="textSecondary" sx={{ ml: 2 }}>
-                                        Showing {filteredData.length} of {pocData.length} POC codes
+                                        Showing {filteredData.length} of {pocData.length} Usecase codes
                                     </Typography>
                                     <TablePagination
                                         rowsPerPageOptions={[5, 10, 25]}
@@ -1081,6 +1166,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             </Menu>
 
             {/* Modal for PocPrjId */}
+            {/* Modal for PocPrjId */}
             <Dialog
                 open={open}
                 onClose={handleClose}
@@ -1093,10 +1179,9 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                         onSuccess={() => {
                             handleClose();
                             setPage(0); // Reset to first page
-                            setTimeout(() => {
-                                fetchPocData();
-                                showSnackbar('POC record created successfully', 'success');
-                            }, 500);
+                            // Remove the setTimeout and call fetchPocData directly
+                            fetchPocData();
+                            showSnackbar('Usecase record created successfully', 'success');
                         }}
                     />
                 </DialogContent>
@@ -1120,7 +1205,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Project Name" value={selectedPoc.pocName} />
                             <DetailItem label="Description" value={selectedPoc.description || '-'} />
                             <DetailItem label="Client Type" value={selectedPoc.entityType} />
-                            <DetailItem label="POC Type" value={selectedPoc.pocType} />
+                            <DetailItem label="Usecase Type" value={selectedPoc.pocType} />
                             <DetailItem label="Company Name" value={selectedPoc.entityName} />
                             <DetailItem label="Sales Person" value={selectedPoc.salesPerson} />
                             <DetailItem label="Region" value={selectedPoc.region} />
@@ -1181,10 +1266,9 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                         onSuccess={() => {
                             handleEditClose();
                             setPage(0); // Reset to first page
-                            setTimeout(() => {
-                                fetchPocData();
-                                showSnackbar('POC record updated successfully', 'success');
-                            }, 500);
+                            // Remove the setTimeout and call fetchPocData directly
+                            fetchPocData();
+                            showSnackbar('Usecase record updated successfully', 'success');
                         }}
                     />
                 </DialogContent>
@@ -1195,7 +1279,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 <DialogTitle>Confirm Delete</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Are you sure you want to delete POC <strong>{pocToDelete?.pocId}</strong> - {pocToDelete?.pocName}?
+                        Are you sure you want to delete Usecase <strong>{pocToDelete?.pocId}</strong> - {pocToDelete?.pocName}?
                     </Typography>
                     <Typography variant="body2" color="error" sx={{ mt: 1 }}>
                         This action cannot be undone.

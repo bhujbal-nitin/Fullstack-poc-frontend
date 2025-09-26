@@ -197,7 +197,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     setSalesPersons(salesData.length > 0 ? salesData : ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
                 } catch (salesError) {
                     console.error('Error fetching sales persons:', salesError);
-                    setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
+                    setSalesPersons([]);
                 }
 
                 // Fetch Assigned To options from API
@@ -211,7 +211,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     setUsers(assignToData.length > 0 ? assignToData : ['admin', 'manager', 'developer', 'tester', 'analyst']);
                 } catch (assignToError) {
                     console.error('Error fetching assigned to options:', assignToError);
-                    setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
+                    setUsers([]);
                 }
 
                 // Fetch Created By options from API with emp_name parameter
@@ -229,7 +229,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                         setCreatedByOptions([emp_name]);
                     }
                 } else {
-                    setCreatedByOptions(['admin', 'manager', 'user']);
+                    setCreatedByOptions([]);
                 }
 
                 // Load other dropdown data
@@ -239,10 +239,10 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
                 // Fallback to dummy data if API fails
-                setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
+                setSalesPersons([]);
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
-                setCreatedByOptions(['admin', 'manager', 'user']);
+                setUsers([]);
+                setCreatedByOptions([]);
                 setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
             } finally {
                 setApiLoading(false);
@@ -308,7 +308,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         // Validation
         const newErrors = {};
         if (!idPrefix) newErrors.idPrefix = 'ID Prefix is required';
-        if (!pocName) newErrors.pocName = 'POC/Project Name is required';
+        if (!pocName) newErrors.pocName = 'Usecase Name is required';
         if (!entityType) newErrors.entityType = 'Client Type is required';
         if (!entityName) newErrors.entityName = 'Company Name is required';
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
@@ -319,7 +319,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         if (!endDate) newErrors.endDate = 'End Date is required';
         if (!region) newErrors.region = 'Region is required';
         if (!isBillable) newErrors.isBillable = 'Billable status is required';
-        if (!pocType) newErrors.pocType = 'POC Type is required';
+        if (!pocType) newErrors.pocType = 'Usecase Type is required';
         if (tags.length === 0) newErrors.tags = 'At least one tag is required';
 
         setErrors(newErrors);
@@ -337,8 +337,8 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     partnerName: entityType === 'Partner' ? partnerName : '',
                     salesPerson,
                     description,
-                    assignedTo: assignedTo.join(','), // Convert array to comma-separated string
-                    createdBy: createdBy,
+                    assignedTo: assignedTo.join(','),
+                    createdBy: createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : ''),
                     startDate,
                     endDate,
                     remark,
@@ -360,8 +360,9 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 });
 
                 // Fix the response handling - check for success message instead of success property
-                if (response.data && (response.data.success || response.data.message === 'POC saved successfully')) {
-                    alert('POC Code created successfully!');
+                // Fix the response handling - check for success message instead of success property
+                if (response.data && (response.data.success || response.data.message === 'POC saved successfully' || response.data.message === 'Usecase saved successfully')) {
+                    alert('Usecase Code created successfully!');
                     resetForm();
                     if (onSuccess) {
                         onSuccess(); // This should refresh the table data
@@ -371,11 +372,11 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     alert('Failed to create Usecase Code: ' + (response.data.message || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('Error saving POC Code:', error);
+                console.error('Error saving Usecase Code:', error);
                 if (error.response?.status === 401) {
                     alert('Session expired. Please login again.');
                 } else {
-                    alert('Error saving POC Code. Please try again.');
+                    alert('Error saving Usecase Code. Please try again.');
                 }
             } finally {
                 setLoading(false);
@@ -431,7 +432,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     stepValid = false;
                 }
                 if (!pocName) {
-                    newErrors.pocName = 'POC/Project Name is required';
+                    newErrors.pocName = 'Usecase Name is required';
                     stepValid = false;
                 }
                 break;
@@ -483,7 +484,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 break;
             case 3:
                 if (!pocType) {
-                    newErrors.pocType = 'POC Type is required';
+                    newErrors.pocType = 'Usecase Type is required';
                     stepValid = false;
                 }
                 if (tags.length === 0) {
@@ -506,7 +507,12 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     const handleBackStep = () => {
         setActiveStep((prev) => prev - 1);
     };
-
+    // Auto-populate createdBy with the first available option
+    useEffect(() => {
+        if (createdByOptions.length > 0 && !createdBy) {
+            setCreatedBy(createdByOptions[0]);
+        }
+    }, [createdByOptions, createdBy]);
     const steps = ['Basic Information', 'Client Details', 'Team & Timeline', 'Additional Information'];
 
     const renderStepContent = (step) => {
@@ -538,7 +544,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 value={pocName}
                                 onChange={setPocName}
                                 error={errors.pocName}
-                                placeholder="Enter POC/Project Name"
+                                placeholder="Enter Usecase Name"
                                 required
                                 icon={<WorkIcon />}
                             />
@@ -670,6 +676,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 );
 
+
             case 2:
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -714,145 +721,24 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                         </Box>
 
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                            <Dropdown
-                                label="Created By"
-                                options={createdByOptions}
-                                value={createdBy}
-                                onChange={setCreatedBy}
-                                error={errors.createdBy}
-                                placeholder="Select Creator"
-                                required
-                                loading={apiLoading}
-                                icon={<PersonIcon />}
-                            />
-
-                            <Dropdown
-                                label="Is Billable"
-                                options={['Yes', 'No']}
-                                value={isBillable}
-                                onChange={setIsBillable}
-                                error={errors.isBillable}
-                                placeholder="Select Billable Status"
-                                required
-                                icon={<MoneyIcon />}
-                            />
-                        </Box>
-
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            {/* Created By - Display only with the available option */}
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                    Start Date *
+                                    Created By
                                 </Typography>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className={errors.startDate ? 'error' : ''}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: errors.startDate ? '2px solid #d32f2f' : '1px solid #ccc',
-                                        borderRadius: '4px',
-                                        fontSize: '14px'
-                                    }}
-                                />
-                                {errors.startDate && (
-                                    <Typography variant="caption" color="error">
-                                        {errors.startDate}
-                                    </Typography>
-                                )}
-                            </Box>
-
-                            <Box>
-                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                    End Date *
-                                </Typography>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className={errors.endDate ? 'error' : ''}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: errors.endDate ? '2px solid #d32f2f' : '1px solid #ccc',
-                                        borderRadius: '4px',
-                                        fontSize: '14px'
-                                    }}
-                                />
-                                {errors.endDate && (
-                                    <Typography variant="caption" color="error">
-                                        {errors.endDate}
-                                    </Typography>
-                                )}
-                            </Box>
-                        </Box>
-                    </Box>
-                );
-                return (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <Box>
-                            <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                Assigned To *
-                            </Typography>
-                            <Button
-                                variant="outlined"
-                                onClick={handleOpenUserDialog}
-                                startIcon={<GroupIcon />}
-                                fullWidth
-                                sx={{ justifyContent: 'flex-start', mb: 1 }}
-                            >
-                                Select Team Members ({assignedTo.length} selected)
-                            </Button>
-                            {errors.assignedTo && (
-                                <Typography variant="caption" color="error">
-                                    {errors.assignedTo}
-                                </Typography>
-                            )}
-
-                            {assignedTo.length > 0 && (
-                                <Box sx={{ mt: 1 }}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Selected team members:
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <img
-                                                src={companyLogo}
-                                                alt="Company Logo"
-                                                style={{ height: '40px' }}
-                                            />
-                                            {onBack && (
-                                                <Button
-                                                    onClick={onBack}
-                                                    startIcon={<CloseIcon />}
-                                                    variant="outlined"
-                                                    size="small"
-                                                >
-                                                    Back to Dashboard
-                                                </Button>
-                                            )}
-                                        </Box>
-                                        <IconButton onClick={onClose} aria-label="close">
-                                            <CloseIcon />
-                                        </IconButton>
-                                    </Box>
+                                <Box sx={{
+                                    padding: '8px 12px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#f5f5f5',
+                                    minHeight: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    fontSize: '14px'
+                                }}>
+                                    {createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : 'N/A')}
                                 </Box>
-                            )}
-                        </Box>
-
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                            <Dropdown
-                                label="Created By"
-                                options={createdByOptions}
-                                value={createdBy}
-                                onChange={setCreatedBy}
-                                error={errors.createdBy}
-                                placeholder="Select Creator"
-                                required
-                                loading={apiLoading}
-                                icon={<PersonIcon />}
-                            />
+                            </Box>
 
                             <Dropdown
                                 label="Is Billable"
@@ -917,13 +803,14 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                         </Box>
                     </Box>
                 );
+
 
             case 3:
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                             <Dropdown
-                                label="POC Type"
+                                label="Usecase Type"
                                 options={[
                                     'POC',
                                     'POP',
@@ -943,7 +830,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 value={pocType}
                                 onChange={setPocType}
                                 error={errors.pocType}
-                                placeholder="Select POC Type"
+                                placeholder="Select Usecase Type"
                                 required
                                 icon={<AssignmentIcon />}
                             />
