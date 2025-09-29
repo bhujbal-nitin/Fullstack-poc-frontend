@@ -11,6 +11,8 @@ import LoginPage from "./components/LoginPage";
 import PocTable from "./components/PocTable";
 import axios from "axios";
 import "./App.css";
+import Report from "./components/Report";
+ 
 
 // Main App component with routing
 function App() {
@@ -77,7 +79,7 @@ function AppContent() {
   // Function to fetch sales persons from API
   const fetchSalesPersons = (token) => {
     setLoadingSalesPersons(true);
-    axios.get('http://10.41.11.103:5050/poc/getAllSalesPerson', {
+    axios.get('http://localhost:5050/poc/getAllSalesPerson', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -100,52 +102,101 @@ function AppContent() {
   };
 
   // 1️⃣ Check if user is already logged in on app load
+  // useEffect(() => {
+  //   const token = localStorage.getItem('authToken');
+  //   const userData = localStorage.getItem('user');
+
+  //   const redirectToLogin = () => {
+  //     if (location.pathname !== '/login') {
+  //       navigate('/login', { replace: true });
+  //     }
+  //   };
+
+  //   const redirectToDashboard = () => {
+  //     if (location.pathname === '/login') {
+  //       navigate('/dashboard', { replace: true });
+  //     }
+  //   };
+
+  //   if (token && userData) {
+  //     axios
+  //       .get('http://10.41.11.103:5050/poc/api/auth/validate', {
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       })
+  //       .then((res) => {
+  //         if (res.data.valid) {
+  //           setCurrentUser(JSON.parse(userData));
+  //           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  //           fetchSalesPersons(token);
+  //           redirectToDashboard();
+  //         } else {
+  //           localStorage.removeItem('authToken');
+  //           localStorage.removeItem('user');
+  //           redirectToLogin();
+  //         }
+  //       })
+  //       .catch(() => {
+  //         localStorage.removeItem('authToken');
+  //         localStorage.removeItem('user');
+  //         redirectToLogin();
+  //       })
+  //       .finally(() => setAuthChecked(true));
+  //   } else {
+  //     setAuthChecked(true);
+  //     redirectToLogin();
+  //   }
+  // }, []); // only run once on mount
+
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('user');
 
-    const redirectToLogin = () => {
-      if (location.pathname !== '/login') {
-        navigate('/login', { replace: true });
-      }
-    };
+    if (token && userData) {
+      // Immediately set the user from cache for fast UI load
+      const cachedUser = JSON.parse(userData);
+      setCurrentUser(cachedUser);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-    const redirectToDashboard = () => {
+      // Validate in background (non-blocking)
+      const validateInBackground = async () => {
+        try {
+          const response = await axios.get('http://localhost:5050/poc/api/auth/validate', {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 5000
+          });
+
+          if (!response.data.valid) {
+            // Token is invalid - logout
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            setCurrentUser(null);
+            if (location.pathname !== '/login') {
+              navigate('/login', { replace: true });
+            }
+          }
+          // If valid, do nothing - user is already logged in
+        } catch (error) {
+          // Network errors - don't logout, just log
+          console.warn('Background validation failed:', error.message);
+          // User stays logged in with cached token
+        }
+      };
+
+      validateInBackground();
+      fetchSalesPersons(token);
+
       if (location.pathname === '/login') {
         navigate('/dashboard', { replace: true });
       }
-    };
 
-    if (token && userData) {
-      axios
-        .get('http://10.41.11.103:5050/poc/api/auth/validate', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => {
-          if (res.data.valid) {
-            setCurrentUser(JSON.parse(userData));
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            fetchSalesPersons(token);
-            redirectToDashboard();
-          } else {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
-            redirectToLogin();
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('user');
-          redirectToLogin();
-        })
-        .finally(() => setAuthChecked(true));
+      setAuthChecked(true);
     } else {
       setAuthChecked(true);
-      redirectToLogin();
+      if (location.pathname !== '/login') {
+        navigate('/login', { replace: true });
+      }
     }
-  }, []); // only run once on mount
-
-
+  }, [navigate, location.pathname]);
 
   // Handle login
   const handleLogin = (user) => {
@@ -163,7 +214,7 @@ function AppContent() {
   // Handle logout
   const handleLogout = async () => {
     try {
-      await axios.post('http://10.41.11.103:5050/poc/api/auth/logout', {}, {
+      await axios.post('http://localhost:5050/poc/api/auth/logout', {}, {
         withCredentials: true
       });
     } catch (error) {
@@ -270,7 +321,7 @@ function AppContent() {
     setLoading(true);
     const token = localStorage.getItem('authToken');
 
-    fetch("http://10.41.11.103:5050/poc/save", {
+    fetch("http://localhost:5050/poc/save", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -617,6 +668,18 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+         <Route
+          path="/report"
+          element={
+            <ProtectedRoute>
+              <Report
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/confirmation"
@@ -626,6 +689,7 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+
 
         {/* Redirect root to login */}
         <Route path="/" element={<Navigate to="/login" replace />} />

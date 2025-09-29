@@ -60,6 +60,8 @@ import PocPrjId from './PocPrjId';
 import PocPrjIdEdit from './PocPrjIdEdit';
 
 const PocTable = ({ onNavigate, onLogout, user }) => {
+    console.log('PocTable component mounted');
+
     const theme = useTheme();
     const [open, setOpen] = React.useState(false);
     const [editOpen, setEditOpen] = React.useState(false);
@@ -88,7 +90,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         status: true,
         remark: true,
         entityType: false,
-        entityName: false,
+        entityName: true,
         salesPerson: false,
         region: false,
         isBillable: false,
@@ -248,6 +250,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     };
 
     React.useEffect(() => {
+        localStorage.removeItem('pocTableColumns');
         fetchPocData();
 
         // Load column preferences from localStorage if available
@@ -258,9 +261,10 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     }, []);
 
     // Save column preferences to localStorage when they change
-    React.useEffect(() => {
-        localStorage.setItem('pocTableColumns', JSON.stringify(visibleColumns));
-    }, [visibleColumns]);
+    // React.useEffect(() => {
+    //     console.log('PocTable useEffect running - check what triggers this');
+    //     localStorage.setItem('pocTableColumns', JSON.stringify(visibleColumns));
+    // }, [visibleColumns]);
 
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
@@ -506,61 +510,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setVisibleColumns(allFalse);
     };
 
-    // Column configuration
-    // const columnConfig = {
-    //     pocId: {
-    //         label: 'Usecase ID',
-    //         truncate: false,
-    //         render: (poc) => (
-    //             <Link
-    //                 component="button"
-    //                 onClick={() => handleViewDetails(poc)}
-    //                 sx={{
-    //                     fontWeight: 'bold',
-    //                     textDecoration: 'none',
-    //                     color: 'primary.main',
-    //                     '&:hover': {
-    //                         textDecoration: 'underline',
-    //                         cursor: 'pointer'
-    //                     }
-    //                 }}
-    //             >
-    //                 {poc.pocId}
-    //             </Link>
-    //         )
-    //     },
-    //     pocName: { label: 'Usecase Name', truncate: 20 },
-    //     assignedTo: { label: 'Assigned To', truncate: false },
-    //     startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
-    //     endDate: { label: 'End Date', truncate: false, render: (poc) => formatDate(poc.endDate) },
-    //     actualStartDate: { label: 'Actual Start Date', truncate: false, render: (poc) => formatDate(poc.actualStartDate) },
-    //     actualEndDate: { label: 'Actual End Date', truncate: false, render: (poc) => formatDate(poc.actualEndDate) },
-    //     status: {
-    //         label: 'Status', truncate: false, render: (poc) => (
-    //             <Chip
-    //                 label={poc.status || 'Draft'}
-    //                 color={getStatusColor(poc.status)}
-    //                 size="small"
-    //             />
-    //         )
-    //     },
-    //     remark: { label: 'Remark', truncate: 20 },
-    //     entityType: { label: 'Client Type', truncate: false },
-    //     entityName: { label: 'Company Name', truncate: 15 },
-    //     salesPerson: { label: 'Sales Person', truncate: false },
-    //     region: { label: 'Region', truncate: false },
-    //     isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
-    //     pocType: { label: 'Usecase Type', truncate: false },
-    //     description: { label: 'Description', truncate: 25 },
-    //     spocEmail: { label: 'SPOC Email', truncate: 20 },
-    //     spocDesignation: { label: 'SPOC Designation', truncate: false },
-    //     tags: { label: 'Tags', truncate: 15 },
-    //     createdBy: { label: 'Created By', truncate: false },
-    //     estimatedEfforts: { label: 'Estimated Efforts', truncate: false },
-    //     approvedBy: { label: 'Approved By', truncate: false },
-    //     totalEfforts: { label: 'Total Efforts', truncate: false },
-    //     varianceDays: { label: 'Variance Days', truncate: false }
-    // };
+    
 
     // Add this state for editing status
     const [editingStatus, setEditingStatus] = React.useState(null);
@@ -638,6 +588,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Link>
             )
         },
+        entityName: { label: 'Company Name', truncate: 15 },
         pocName: { label: 'Usecase Name', truncate: 20 },
         assignedTo: { label: 'Assigned To', truncate: false },
         startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
@@ -715,7 +666,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             )
         },
         entityType: { label: 'Client Type', truncate: false },
-        entityName: { label: 'Company Name', truncate: 15 },
+        
         salesPerson: { label: 'Sales Person', truncate: false },
         region: { label: 'Region', truncate: false },
         isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
