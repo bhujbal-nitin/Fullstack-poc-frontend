@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Bar, Doughnut, Line } from "react-chartjs-2";
+import { Bar, Doughnut, Line, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -48,6 +48,9 @@ import {
   TrendingUp as TrendingUpIcon,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
+  CheckCircle as CheckCircleIcon,
+  PlayArrow as PlayArrowIcon,
+  Warning as WarningIcon,
 } from "@mui/icons-material";
 
 // Register ChartJS components
@@ -73,6 +76,50 @@ function TabPanel(props) {
   );
 }
 
+// StatCard Component for Grafana-style cards
+const StatCard = ({ title, value, icon, color, subtitle }) => (
+  <Card sx={{
+    background: `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`,
+    color: 'white',
+    borderRadius: 3,
+    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+    height: '100%',
+    transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+    '&:hover': {
+      transform: 'translateY(-4px)',
+      boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
+    }
+  }}>
+    <CardContent sx={{ p: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+            {value}
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 'medium' }}>
+            {title}
+          </Typography>
+          {subtitle && (
+            <Typography variant="caption" sx={{ opacity: 0.8 }}>
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
+        <Box sx={{
+          bgcolor: 'rgba(255,255,255,0.2)',
+          borderRadius: '50%',
+          p: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {icon}
+        </Box>
+      </Box>
+    </CardContent>
+  </Card>
+);
+
 const Report = ({ onNavigate, onLogout, user }) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,11 +131,14 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const [chartData, setChartData] = useState(null);
   const [statusChartData, setStatusChartData] = useState(null);
   const [doughnutChartData, setDoughnutChartData] = useState(null);
+  const [clientTypeChartData, setClientTypeChartData] = useState(null);
+  const [clientTypePieChartData, setClientTypePieChartData] = useState(null);
   const [regionFilter, setRegionFilter] = useState("");
   const [pocTypeFilter, setPocTypeFilter] = useState("");
   const [activeTab, setActiveTab] = useState(0);
   const [dateRange, setDateRange] = useState("all");
   const [chartType, setChartType] = useState("bar");
+  const [overdueUsecases, setOverdueUsecases] = useState([]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -101,6 +151,9 @@ const Report = ({ onNavigate, onLogout, user }) => {
     updateChartData();
     updateStatusChartData();
     updateDoughnutChartData();
+    updateClientTypeChartData();
+    updateClientTypePieChartData();
+    updateOverdueUsecases();
   }, [reports, startDate, endDate, pocTypes, statusTypes, regionFilter, pocTypeFilter, dateRange]);
 
   const fetchInitialData = async () => {
@@ -117,6 +170,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
     } catch (error) {
       console.error("Error fetching Usecase types:", error);
       const extractedTypes = extractPocTypesFromReports(reports);
+      console.log(extractedTypes)
       setPocTypes(extractedTypes);
     }
 
@@ -138,6 +192,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
       });
       const reportsData = Array.isArray(reportsResponse.data) ? reportsResponse.data : [];
       setReports(reportsData);
+
     } catch (error) {
       console.error("Error fetching reports:", error);
       setError("Failed to load reports. Showing sample data.");
@@ -157,12 +212,22 @@ const Report = ({ onNavigate, onLogout, user }) => {
   };
 
   const extractPocTypesFromReports = (reportsData) => {
+
     const types = new Set();
     reportsData.forEach(report => {
       if (report.pocType) types.add(report.pocType);
       else if (report.poc_type) types.add(report.poc_type);
     });
+    console.log(Array.from(types).filter(type => type));
     return Array.from(types).filter(type => type);
+  };
+
+  const extractClientTypesFromReports = (reportsData) => {
+    const clientTypes = new Set();
+    reportsData.forEach(report => {
+      if (report.partner_client_own) clientTypes.add(report.partner_client_own);
+    });
+    return Array.from(clientTypes).filter(type => type).sort();
   };
 
   const getRegions = () => {
@@ -173,7 +238,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const handleDateRangeChange = (range) => {
     setDateRange(range);
     const today = new Date();
-    
+
     switch (range) {
       case 'last30':
         const last30 = new Date(today);
@@ -185,6 +250,12 @@ const Report = ({ onNavigate, onLogout, user }) => {
         const last90 = new Date(today);
         last90.setDate(last90.getDate() - 90);
         setStartDate(last90.toISOString().split('T')[0]);
+        setEndDate(today.toISOString().split('T')[0]);
+        break;
+      case 'last365':  // Add this case for Last 1 Year
+        const last365 = new Date(today);
+        last365.setDate(last365.getDate() - 365);
+        setStartDate(last365.toISOString().split('T')[0]);
         setEndDate(today.toISOString().split('T')[0]);
         break;
       case 'custom':
@@ -260,6 +331,12 @@ const Report = ({ onNavigate, onLogout, user }) => {
         },
       ],
     });
+
+    console.log('🔍 DEBUG updateChartData:');
+    console.log('Total filtered reports:', filtered.length);
+    console.log('Reports counted in chart:', Object.values(typeCounts).reduce((a, b) => a + b, 0));
+    console.log('Available pocTypes:', pocTypes);
+    console.log('Type counts:', typeCounts);
   };
 
   const updateStatusChartData = () => {
@@ -289,13 +366,13 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
     const getStatusColor = (status) => {
       const statusLower = status?.toLowerCase();
-      if (statusLower.includes('completed') || statusLower.includes('done') || statusLower.includes('success')) 
+      if (statusLower.includes('completed') || statusLower.includes('done') || statusLower.includes('success'))
         return 'rgba(76, 175, 80, 0.9)';
-      if (statusLower.includes('progress') || statusLower.includes('ongoing')) 
+      if (statusLower.includes('progress') || statusLower.includes('ongoing'))
         return 'rgba(255, 152, 0, 0.9)';
-      if (statusLower.includes('pending') || statusLower.includes('waiting') || statusLower.includes('planned')) 
+      if (statusLower.includes('pending') || statusLower.includes('waiting') || statusLower.includes('planned'))
         return 'rgba(33, 150, 243, 0.9)';
-      if (statusLower.includes('cancel') || statusLower.includes('reject') || statusLower.includes('failed')) 
+      if (statusLower.includes('cancel') || statusLower.includes('reject') || statusLower.includes('failed'))
         return 'rgba(244, 67, 54, 0.9)';
       return 'rgba(158, 158, 158, 0.9)';
     };
@@ -320,7 +397,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
   const updateDoughnutChartData = () => {
     const filtered = filterReports();
-    
+
     if (filtered.length === 0) {
       setDoughnutChartData({
         labels: ['No Data'],
@@ -336,12 +413,30 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
     const labels = pocTypes.length > 0 ? pocTypes.slice(0, 6) : ['No Types'];
     const typeCounts = {};
+    const uncategorized = []; // 👈 track uncategorized
+
     labels.forEach(type => {
       typeCounts[type] = filtered.filter(report => {
         const reportType = report.pocType || report.poc_type || 'Unknown';
-        return reportType === type;
+        if (reportType === type) {
+          return true;
+        }
+        return false;
       }).length;
     });
+
+    // find records that don't belong to any label
+    filtered.forEach(report => {
+      const reportType = report.pocType || report.poc_type || 'Unknown';
+      if (!labels.includes(reportType)) {
+        uncategorized.push(report); // 👈 collect uncategorized
+      }
+    });
+
+    // 👀 Print uncategorized records in console
+    if (uncategorized.length > 0) {
+      console.warn("Uncategorized Records:", uncategorized);
+    }
 
     setDoughnutChartData({
       labels: labels,
@@ -356,6 +451,127 @@ const Report = ({ onNavigate, onLogout, user }) => {
         spacing: 3,
       }]
     });
+  };
+
+  const updateClientTypeChartData = () => {
+    const filtered = filterReports();
+
+    // 🔍 DEBUG: Check what client type data exists
+    console.log('🔍 DEBUG Client Types Analysis:');
+    console.log('Total filtered reports:', filtered.length);
+
+    const clientTypesFound = filtered.map(report => ({
+      partner_client_own: report.partner_client_own,
+      id: report.id
+    }));
+    console.log('Client type data in reports:', clientTypesFound);
+
+    const clientTypes = extractClientTypesFromReports(filtered);
+    console.log('Extracted client types:', clientTypes);
+
+    if (filtered.length === 0) {
+      setClientTypeChartData({
+        labels: ['No Data Available'],
+        datasets: [{
+          label: 'Number of Usecases',
+          data: [0],
+          backgroundColor: 'rgba(120, 120, 120, 0.6)',
+          borderColor: 'rgba(120, 120, 120, 1)',
+          borderWidth: 2,
+        }]
+      });
+      return;
+    }
+
+    const labels = clientTypes.length > 0 ? clientTypes : ['No Client Types Available'];
+
+    const clientTypeCounts = {};
+    labels.forEach(clientType => {
+      clientTypeCounts[clientType] = filtered.filter(report => {
+        const reportClientType = report.partner_client_own || 'Unknown';
+        return reportClientType === clientType;
+      }).length;
+    });
+
+    console.log('Client type counts:', clientTypeCounts);
+
+    const backgroundColors = getVibrantColors(labels.length);
+
+    setClientTypeChartData({
+      labels: labels,
+      datasets: [
+        {
+          label: 'Number of Usecases',
+          data: Object.values(clientTypeCounts),
+          backgroundColor: backgroundColors,
+          borderColor: backgroundColors.map(color => color.replace('0.9', '1')),
+          borderWidth: 3,
+          borderRadius: 12,
+          borderSkipped: false,
+          barPercentage: 0.7,
+          categoryPercentage: 0.8,
+        },
+      ],
+    });
+  };
+
+  const updateClientTypePieChartData = () => {
+    const filtered = filterReports();
+
+    const clientTypes = extractClientTypesFromReports(filtered);
+
+    if (filtered.length === 0 || clientTypes.length === 0) {
+      setClientTypePieChartData({
+        labels: ['No Data Available'],
+        datasets: [{
+          data: [1],
+          backgroundColor: ['rgba(200, 200, 200, 0.7)'],
+          borderColor: ['rgba(200, 200, 200, 1)'],
+          borderWidth: 2,
+        }]
+      });
+      return;
+    }
+
+    const labels = clientTypes.slice(0, 5); // Show top 5 client types for pie chart
+    const clientTypeCounts = {};
+
+    labels.forEach(clientType => {
+      clientTypeCounts[clientType] = filtered.filter(report => {
+        const reportClientType = report.partner_client_own || 'Unknown';
+        return reportClientType === clientType;
+      }).length;
+    });
+
+    // Calculate "Others" if there are more than 5 client types
+    let otherCount = 0;
+    if (clientTypes.length > 5) {
+      otherCount = filtered.length - Object.values(clientTypeCounts).reduce((a, b) => a + b, 0);
+    }
+
+    const pieLabels = otherCount > 0 ? [...labels, 'Others'] : labels;
+    const pieData = otherCount > 0 ? [...Object.values(clientTypeCounts), otherCount] : Object.values(clientTypeCounts);
+
+    setClientTypePieChartData({
+      labels: pieLabels,
+      datasets: [{
+        data: pieData,
+        backgroundColor: getVibrantColors(pieLabels.length),
+        borderColor: getVibrantColors(pieLabels.length).map(color => color.replace('0.9', '1')),
+        borderWidth: 3,
+        hoverOffset: 15,
+      }]
+    });
+  };
+
+  const updateOverdueUsecases = () => {
+    const today = new Date();
+    const overdue = filterReports().filter(report => {
+      if (!report.excepted_end_date || report.status?.toLowerCase().includes('completed')) return false;
+      const endDate = new Date(report.excepted_end_date);
+      return endDate < today;
+    });
+    setOverdueUsecases(overdue);
   };
 
   const filterReports = () => {
@@ -401,7 +617,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { 
+      legend: {
         display: true,
         position: 'top',
         labels: {
@@ -411,9 +627,9 @@ const Report = ({ onNavigate, onLogout, user }) => {
           pointStyle: 'circle'
         }
       },
-      title: { 
-        display: true, 
-        text: '🔥 USECASES BY TYPE',
+      title: {
+        display: true,
+        text: ' USECASES BY TYPE',
         font: { size: 20, weight: 'bold' },
         padding: { top: 10, bottom: 20 },
         color: theme.palette.primary.main
@@ -428,23 +644,23 @@ const Report = ({ onNavigate, onLogout, user }) => {
       }
     },
     scales: {
-      x: { 
-        grid: { 
+      x: {
+        grid: {
           display: true,
           color: 'rgba(0, 0, 0, 0.05)'
         },
-        ticks: { 
+        ticks: {
           font: { size: 12, weight: 'bold' },
           maxRotation: 45
         }
       },
-      y: { 
-        beginAtZero: true, 
-        ticks: { 
+      y: {
+        beginAtZero: true,
+        ticks: {
           stepSize: 1,
           font: { size: 12, weight: 'bold' }
-        }, 
-        grid: { 
+        },
+        grid: {
           color: 'rgba(0, 0, 0, 0.08)',
           drawBorder: false
         }
@@ -467,37 +683,55 @@ const Report = ({ onNavigate, onLogout, user }) => {
     }
   };
 
-  const doughnutChartOptions = {
+  const clientTypeChartOptions = {
+    ...chartOptions,
+    plugins: {
+      ...chartOptions.plugins,
+      title: {
+        ...chartOptions.plugins.title,
+        text: '🏢 USECASES BY CLIENT TYPE'
+      }
+    }
+  };
+
+  const clientTypePieChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'right',
-        labels: {
-          font: { size: 12, weight: 'bold' },
-          padding: 15,
-          usePointStyle: true,
-        }
+        display: false, // Hide legend to make space for larger chart
       },
       title: {
-        display: true,
-        text: '🍩 TYPE DISTRIBUTION',
-        font: { size: 18, weight: 'bold' },
-        padding: { top: 10, bottom: 20 },
-        color: theme.palette.primary.main
+        display: false, // Hide title since we have it in the Paper component
       },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        titleFont: { size: 13, weight: 'bold' },
-        bodyFont: { size: 12 },
+        titleFont: { size: 12, weight: 'bold' },
+        bodyFont: { size: 11 },
         padding: 10,
-        cornerRadius: 6
+        cornerRadius: 6,
+        usePointStyle: true,
       }
     },
-    cutout: '50%',
+    // Increase the chart radius
+    elements: {
+      arc: {
+        borderWidth: 2,
+        borderColor: '#ffffff',
+      }
+    },
+    // Adjust layout to use more space
+    layout: {
+      padding: {
+        top: 10,
+        bottom: 10,
+        left: 10,
+        right: 10
+      }
+    },
     animation: {
-      animateScale: true,
-      animateRotate: true
+      duration: 1000,
+      easing: 'easeOutQuart'
     }
   };
 
@@ -515,12 +749,13 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
   const filteredReports = filterReports();
   const totalPocs = filteredReports.length;
-  const completedPocs = filteredReports.filter(r => 
+  const completedPocs = filteredReports.filter(r =>
     r.status?.toLowerCase().includes('completed') || r.status?.toLowerCase().includes('done')
   ).length;
-  const inProgressPocs = filteredReports.filter(r => 
+  const inProgressPocs = filteredReports.filter(r =>
     r.status?.toLowerCase().includes('progress') || r.status?.toLowerCase().includes('ongoing')
   ).length;
+  const overdueCount = overdueUsecases.length;
 
   const renderChart = (data, options, title) => {
     switch (chartType) {
@@ -535,7 +770,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
   return (
     <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: '#f8fafc' }}>
-      <AppBar position="static" elevation={2} sx={{ 
+      <AppBar position="static" elevation={2} sx={{
         bgcolor: 'primary.main',
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
       }}>
@@ -554,7 +789,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
             variant="h5"
             component="h1"
             color="inherit"
-            sx={{ 
+            sx={{
               flexGrow: 1,
               fontWeight: 'bold',
               fontFamily: 'Arial, sans-serif'
@@ -563,13 +798,13 @@ const Report = ({ onNavigate, onLogout, user }) => {
             🚀 Usecases Analytics Dashboard
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Chip 
-              label={`👋 Welcome, ${user?.emp_name || user?.email_id || 'User'}`} 
-              variant="outlined" 
+            <Chip
+              label={`👋 Welcome, ${user?.emp_name || user?.email_id || 'User'}`}
+              variant="outlined"
               sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}
             />
-            <Button 
-              color="inherit" 
+            <Button
+              color="inherit"
               onClick={onLogout}
               startIcon={<DashboardIcon />}
               variant="outlined"
@@ -582,24 +817,122 @@ const Report = ({ onNavigate, onLogout, user }) => {
       </AppBar>
 
       <Box sx={{ p: isMobile ? 1 : 3 }}>
-        {/* Summary Cards - Top Section */}
-      
+        {/* Summary Cards - Grafana Style with Pie Chart */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {/* First 3 cards remain exactly as they were */}
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              title="Total Usecases"
+              value={totalPocs}
+              icon={<DashboardIcon sx={{ fontSize: 30 }} />}
+              color="#0061ff"
+              subtitle="All active projects"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              title="Completed"
+              value={completedPocs}
+              icon={<CheckCircleIcon sx={{ fontSize: 30 }} />}
+              color="#32a852"
+              subtitle={`${totalPocs ? Math.round((completedPocs / totalPocs) * 100) : 0}% success rate`}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              title="In Progress"
+              value={inProgressPocs}
+              icon={<PlayArrowIcon sx={{ fontSize: 30 }} />}
+              color="#ff9f1c"
+              subtitle="Active development"
+            />
+          </Grid>
 
+          {/* 4th card with pie chart - similar style to first 3 cards */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper elevation={3} sx={{
+              p: 2,
+              borderRadius: 3,
+              height: '100%',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '140px',
+              color: 'white'
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    {filteredReports.length}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 'medium' }}>
+                    CLIENT TYPE
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                    Distribution
+                  </Typography>
+                </Box>
+                <Box sx={{
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  borderRadius: '50%',
+                  p: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <BusinessIcon sx={{ fontSize: 24 }} />
+                </Box>
+              </Box>
+              <Box sx={{
+                height: '120px',
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                {clientTypePieChartData ? (
+                  <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+                    <Pie
+                      data={clientTypePieChartData}
+                      options={{
+                        ...clientTypePieChartOptions,
+                        plugins: {
+                          ...clientTypePieChartOptions.plugins,
+                          legend: {
+                            ...clientTypePieChartOptions.plugins.legend,
+                            display: false
+                          }
+                        }
+                      }}
+                    />
+                  </Box>
+                ) : (
+                  <Typography variant="body2" sx={{ opacity: 0.8, textAlign: 'center' }}>
+                    No client type data
+                  </Typography>
+                )}
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* Rest of your existing code remains the same... */}
         {/* Enhanced Filters Section */}
         <Paper elevation={4} sx={{ p: 3, mb: 4, borderRadius: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
           <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 3, alignItems: 'center', mb: 2 }}>
             <Typography variant="h5" sx={{ minWidth: 200, fontWeight: 'bold', color: 'primary.main' }}>
               🎛️ Filter Analytics
             </Typography>
-            
+
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {['all', 'last30', 'last90', 'custom'].map((range) => (
+              {['all', 'last30', 'last90', 'last365', 'custom'].map((range) => (
                 <Chip
                   key={range}
                   label={
                     range === 'all' ? '📅 All Time' :
-                    range === 'last30' ? '🔥 Last 30 Days' :
-                    range === 'last90' ? '🚀 Last 90 Days' : '⚙️ Custom Date'
+                      range === 'last30' ? '🔥 Last 30 Days' :
+                        range === 'last90' ? '🚀 Last 90 Days' :
+                          range === 'last365' ? '📊 Last 1 Year' : '⚙️ Custom Date'
                   }
                   onClick={() => handleDateRangeChange(range)}
                   color={dateRange === range ? 'primary' : 'default'}
@@ -670,7 +1003,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
                 select
                 label="🌍 Filter by Region"
                 value={regionFilter}
-                sx={{ minWidth: 220 }} 
+                sx={{ minWidth: 220 }}
                 onChange={(e) => setRegionFilter(e.target.value)}
               >
                 <MenuItem value="">All Regions</MenuItem>
@@ -681,23 +1014,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
                 ))}
               </TextField>
             </Grid>
-
-            {/* <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                select
-                label="🎯 Filter by Usecase Type"
-                value={pocTypeFilter}
-                onChange={(e) => setPocTypeFilter(e.target.value)}
-              >
-                <MenuItem value="">All Usecase Types</MenuItem>
-                {pocTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid> */}
           </Grid>
 
           {error && (
@@ -706,6 +1022,55 @@ const Report = ({ onNavigate, onLogout, user }) => {
             </Alert>
           )}
         </Paper>
+
+        {/* Additional Usecase Type Filter - Added after first graph */}
+        <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
+            🎯 Additional Usecase Type Filter
+          </Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                select
+                label="🔍 Filter by Specific Usecase Type"
+                value={pocTypeFilter}
+                onChange={(e) => setPocTypeFilter(e.target.value)}
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">All Usecase Types</MenuItem>
+                {pocTypes.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label={`📊 Total Filtered: ${filteredReports.length}`}
+                  color="primary"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={`✅ Completed: ${completedPocs}`}
+                  color="success"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={`🔄 In Progress: ${inProgressPocs}`}
+                  color="warning"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+        <br />
 
         {/* Chart Type Selector */}
         <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
@@ -735,9 +1100,9 @@ const Report = ({ onNavigate, onLogout, user }) => {
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {/* First Row: Main Chart */}
-            <Paper elevation={4} sx={{ 
-              p: 3, 
-              borderRadius: 3, 
+            <Paper elevation={4} sx={{
+              p: 3,
+              borderRadius: 3,
               height: '500px',
               background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
               border: '2px solid',
@@ -754,98 +1119,47 @@ const Report = ({ onNavigate, onLogout, user }) => {
               )}
             </Paper>
 
-            {/* Additional Usecase Type Filter - Added after first graph */}
-            <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
-                🎯 Additional Usecase Type Filter
-              </Typography>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    select
-                    label="🔍 Filter by Specific Usecase Type"
-                    value={pocTypeFilter}
-                    onChange={(e) => setPocTypeFilter(e.target.value)}
-                    sx={{ minWidth: 220 }} 
-                  >
-                    <MenuItem value="">All Usecase Types</MenuItem>
-                    {pocTypes.map((type) => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip 
-                      label={`📊 Total Filtered: ${filteredReports.length}`} 
-                      color="primary" 
-                      variant="outlined"
-                      sx={{ fontWeight: 'bold' }}
-                    />
-                    <Chip 
-                      label={`✅ Completed: ${completedPocs}`} 
-                      color="success" 
-                      variant="outlined"
-                      sx={{ fontWeight: 'bold' }}
-                    />
-                    <Chip 
-                      label={`🔄 In Progress: ${inProgressPocs}`} 
-                      color="warning" 
-                      variant="outlined"
-                      sx={{ fontWeight: 'bold' }}
-                    />
-                  </Box>
-                </Grid>
-              </Grid>
+            {/* USECASES BY STATUS - Full Width Chart */}
+            <Paper elevation={4} sx={{
+              p: 3,
+              borderRadius: 3,
+              height: '500px',
+              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+              border: '2px solid',
+              borderColor: 'success.light',
+              width: '100%'
+            }}>
+              {statusChartData ? (
+                renderChart(statusChartData, statusChartOptions)
+              ) : (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <Typography variant="h5" color="text.secondary">
+                    🎯 No status data available
+                  </Typography>
+                </Box>
+              )}
             </Paper>
 
-            {/* Second Row: Doughnut and Status Charts Side by Side */}
-            <Grid container spacing={4}>
-              <Grid item xs={12} md={6}>
-                <Paper elevation={4} sx={{ 
-                  p: 3, 
-                  borderRadius: 3, 
-                  height: '500px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'secondary.light'
-                }}>
-                  {doughnutChartData ? (
-                    <Doughnut data={doughnutChartData} options={doughnutChartOptions} />
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        🍩 No doughnut data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Paper elevation={4} sx={{ 
-                  p: 3, 
-                  borderRadius: 3, 
-                  height: '500px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'success.light'
-                }}>
-                  {statusChartData ? (
-                    renderChart(statusChartData, statusChartOptions)
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        🎯 No status data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-              </Grid>
-            </Grid>
+            {/* USECASES BY CLIENT TYPE - Full Width Chart */}
+            <Paper elevation={4} sx={{
+              p: 3,
+              borderRadius: 3,
+              height: '500px',
+              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+              border: '2px solid',
+              borderColor: 'info.light',
+              width: '100%'
+            }}>
+              {clientTypeChartData ? (
+                renderChart(clientTypeChartData, clientTypeChartOptions)
+              ) : (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <Typography variant="h5" color="text.secondary">
+                    🏢 No client type data available
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
           </Box>
         )}
       </Box>
@@ -853,20 +1167,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
   );
 };
 
-// Sample data generator function
-const generateSampleData = () => {
-  const types = ['AI Implementation', 'Cloud Migration', 'Data Analytics', 'IoT Solution', 'Security Audit'];
-  const statuses = ['Completed', 'In Progress', 'Pending', 'Cancelled'];
-  const regions = ['North America', 'Europe', 'Asia Pacific', 'Middle East'];
-  
-  return Array.from({ length: 50 }, (_, i) => ({
-    id: i + 1,
-    pocType: types[Math.floor(Math.random() * types.length)],
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    region: regions[Math.floor(Math.random() * regions.length)],
-    start_date: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    excepted_end_date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  }));
-};
+
 
 export default Report;

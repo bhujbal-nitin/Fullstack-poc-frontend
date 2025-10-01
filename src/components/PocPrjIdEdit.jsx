@@ -380,6 +380,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     pocName,
                     entityName,
                     entityType,
+                    partnerName,
                     salesPerson,
                     region,
                     isBillable: isBillable === 'Yes',
@@ -411,7 +412,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
 
                 if (response.data.message && response.data.message.includes("successfully")) {
-                    alert('Usecase Code updated successfully!');
+                    // alert('Usecase Code updated successfully!');
                     if (onSuccess) {
                         onSuccess();
                     }
@@ -560,7 +561,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             </Box>
 
                             {/* Usecase Type - Display only */}
-                            <Box>
+                            {/* <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                                     Usecase Type
                                 </Typography>
@@ -576,7 +577,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 }}>
                                     {idPrefix || 'N/A'}
                                 </Box>
-                            </Box>
+                            </Box> */}
                         </Box>
 
                         <TextInput

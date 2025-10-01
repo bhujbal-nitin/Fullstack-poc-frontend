@@ -517,7 +517,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     const [statusMenuAnchor, setStatusMenuAnchor] = React.useState(null);
 
     // Status options
-    const statusOptions = ['Pending', 'In Progress', 'Completed', 'Cancelled', 'Awaiting', 'Hold', 'Closed', 'Converted'];
+    const statusOptions = ['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled',  'Awaiting', 'Hold', 'Closed', 'Converted'];
 
 
     // Function to handle status change
@@ -601,7 +601,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             render: (poc) => (
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Chip
-                        label={poc.status || 'Pending'}
+                        label={poc.status || 'Draft'}
                         color={getStatusColor(poc.status)}
                         size="small"
                         onClick={(e) => handleOpenStatusMenu(e, poc)}
@@ -1177,7 +1177,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Remark" value={selectedPoc.remark || '-'} />
                             <DetailItem
                                 label="Status"
-                                value={selectedPoc.status || 'Pending'}
+                                value={selectedPoc.status || 'Draft'}
                                 render={(value) => (
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                         <Chip
