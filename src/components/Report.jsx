@@ -50,7 +50,8 @@ import {
   BarChart as BarChartIcon,
   CheckCircle as CheckCircleIcon,
   PlayArrow as PlayArrowIcon,
-  Warning as WarningIcon,
+  Warning as WarningIcon
+
 } from "@mui/icons-material";
 
 // Register ChartJS components
@@ -139,6 +140,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const [dateRange, setDateRange] = useState("all");
   const [chartType, setChartType] = useState("bar");
   const [overdueUsecases, setOverdueUsecases] = useState([]);
+
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -234,6 +236,8 @@ const Report = ({ onNavigate, onLogout, user }) => {
     const regions = [...new Set(reports.map(r => r.region).filter(Boolean))];
     return regions.sort();
   };
+
+  
 
   const handleDateRangeChange = (range) => {
     setDateRange(range);
@@ -775,7 +779,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
       }}>
         <Toolbar>
-          <IconButton
+          {/* <IconButton
             edge="start"
             color="inherit"
             aria-label="menu"
@@ -783,7 +787,17 @@ const Report = ({ onNavigate, onLogout, user }) => {
             sx={{ mr: 2 }}
           >
             <MenuIcon />
-          </IconButton>
+          </IconButton> */}
+
+          <Button
+            color="inherit"
+            onClick={() => onNavigate('dashboard')}
+            startIcon={<DashboardIcon />}
+            sx={{ mr: 2 }}
+          >
+            Dashboard
+          </Button>
+
           <AnalyticsIcon sx={{ mr: 2, fontSize: 30 }} />
           <Typography
             variant="h5"
@@ -798,8 +812,9 @@ const Report = ({ onNavigate, onLogout, user }) => {
             🚀 Usecases Analytics Dashboard
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+
             <Chip
-              label={`👋 Welcome, ${user?.emp_name || user?.email_id || 'User'}`}
+              label={`👋 Welcome, ${user?.emp_name || user?.email_id || 'User'} (${user.emp_id})`}
               variant="outlined"
               sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}
             />

@@ -1,11 +1,12 @@
 .page-header {
+  position: relative;
   width: 100%;
   padding: 10px 20px;
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  background: linear-gradient(135deg, #ffffff, #c7c8c9);
   display: flex;
-  align-items: center;  /* vertically align logo + title */
+  align-items: center;
+  justify-content: flex-start; /* keep logo on left */
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  position: sticky;
   top: 0;
   z-index: 1000;
 }
@@ -17,13 +18,14 @@
 }
 
 .logo-img {
-  height: 80px;   /* 👈 same height as heading */
+  height: 50px;   /* 👈 same height as heading */
   width: auto;
 }
 
 .page-title {
-  flex: 1;                   /* takes full width in center */
-  text-align: center;        /* center text */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 2rem;
   font-weight: bold;
   color: white;

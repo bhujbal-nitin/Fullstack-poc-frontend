@@ -1,24 +1,34 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import Pageheading from "./components/Pageheading";
-import Dropdown from "./components/DropDown";
-import TextInput from "./components/TextInput";
-import UsecaseDetails from "./components/UsecaseDetails";
-import Button from "./components/Button";
 import Dashboard from "./components/Dashboard";
-import PocPrjId from "./components/PocPrjId";
 import LoginPage from "./components/LoginPage";
 import PocTable from "./components/PocTable";
 import axios from "axios";
 import "./App.css";
 import Report from "./components/Report";
- 
+import StatusComponent from "./components/StatusComponent";
+import InitiateUsecase from "./components/InitiateUsecase";
+import InitiateUsecaseTable from "./components/InitiateUsecaseTable";
+import InitiateUsecaseEdit from './components/InitiateUsecaseEdit';
+
+import {
+  AppBar,
+  Toolbar,
+  IconButton,
+  Typography,
+  Button as MuiButton,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableRow,
+  Box
+} from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 
 // Main App component with routing
 function App() {
-
-
-
   return (
     <Router basename="/usecase">
       <AppContent />
@@ -31,133 +41,60 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
 
-
   // Authentication and navigation state
   const [currentUser, setCurrentUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
-
-  // POC Form states
-  const [salesPerson, setSalesPerson] = useState("");
-  const [salesPersons, setSalesPersons] = useState([]);
-  const [loadingSalesPersons, setLoadingSalesPersons] = useState(false);
-  const [region, setRegion] = useState("");
-  const [regions, setRegions] = useState(['ROW', 'ISSARC', 'America', 'Other']);
-  const [endCustomerType, setEndCustomerType] = useState("");
-  const [endCustomerTypes, setEndCustomerTypes] = useState(['Client', 'Internal', 'Partner']);
-  const [processType, setProcessType] = useState("");
-  const [processTypes, setProcessTypes] = useState([
-    'POC',
-    'POP',
-    'Partner Support',
-    'Feasibility Check',
-    'Operational Support',
-    'R&D',
-    'Solution Consultation',
-    'Efforts Estimation',
-    'Task',
-    'Demo',
-    'Internal',
-    'Event',
-    'Workshop'
-  ]);
-  const [partnerCompanyName, setPartnerCompanyName] = useState("");
-  const [partnerSpoc, setPartnerSpoc] = useState("");
-  const [partnerSpocEmail, setPartnerSpocEmail] = useState("");
-  const [partnerDesignation, setPartnerDesignation] = useState("");
-  const [partnerMobileNumber, setPartnerMobileNumber] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [spoc, setSpoc] = useState("");
-  const [spocEmail, setSpocEmail] = useState("");
-  const [designation, setDesignation] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
-  const [usecase, setUsecase] = useState("");
-  const [brief, setBrief] = useState("");
   const [submittedData, setSubmittedData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
 
   // Function to fetch sales persons from API
   const fetchSalesPersons = (token) => {
-    setLoadingSalesPersons(true);
-    axios.get('http://localhost:5050/poc/getAllSalesPerson', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-      .then(response => {
-        if (response.data && Array.isArray(response.data)) {
-          setSalesPersons(response.data);
-        } else {
-          console.error('Invalid response format for sales persons');
-          setSalesPersons([]);
+    return new Promise((resolve, reject) => {
+      axios.get('http://localhost:5050/poc/getAllSalesPerson', {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
       })
-      .catch(error => {
-        console.error('Error fetching sales persons:', error);
-        setSalesPersons([]);
-      })
-      .finally(() => {
-        setLoadingSalesPersons(false);
-      });
+        .then(response => {
+          if (response.data) {
+            const salesData = processApiData(response.data);
+            console.log('Processed sales data:', salesData);
+            resolve(salesData.length > 0 ? salesData : []);
+          } else {
+            console.error('Invalid response format for sales persons');
+            resolve([]);
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching sales persons:', error);
+          reject(error);
+        });
+    });
   };
 
-  // 1️⃣ Check if user is already logged in on app load
-  // useEffect(() => {
-  //   const token = localStorage.getItem('authToken');
-  //   const userData = localStorage.getItem('user');
+  // Add the processApiData function to your App.jsx (copy it from your other component)
+  const processApiData = (data) => {
+    // Copy the same implementation from your other component
+    if (!data) return [];
 
-  //   const redirectToLogin = () => {
-  //     if (location.pathname !== '/login') {
-  //       navigate('/login', { replace: true });
-  //     }
-  //   };
+    if (Array.isArray(data)) {
+      return data.map(item => {
+        if (typeof item === 'string') return item;
+        return item.name || item.emp_name || item.username || 'Unknown';
+      });
+    }
 
-  //   const redirectToDashboard = () => {
-  //     if (location.pathname === '/login') {
-  //       navigate('/dashboard', { replace: true });
-  //     }
-  //   };
-
-  //   if (token && userData) {
-  //     axios
-  //       .get('http://10.41.11.103:5050/poc/api/auth/validate', {
-  //         headers: { Authorization: `Bearer ${token}` },
-  //       })
-  //       .then((res) => {
-  //         if (res.data.valid) {
-  //           setCurrentUser(JSON.parse(userData));
-  //           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  //           fetchSalesPersons(token);
-  //           redirectToDashboard();
-  //         } else {
-  //           localStorage.removeItem('authToken');
-  //           localStorage.removeItem('user');
-  //           redirectToLogin();
-  //         }
-  //       })
-  //       .catch(() => {
-  //         localStorage.removeItem('authToken');
-  //         localStorage.removeItem('user');
-  //         redirectToLogin();
-  //       })
-  //       .finally(() => setAuthChecked(true));
-  //   } else {
-  //     setAuthChecked(true);
-  //     redirectToLogin();
-  //   }
-  // }, []); // only run once on mount
+    return [];
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('user');
 
     if (token && userData) {
-      // Immediately set the user from cache for fast UI load
       const cachedUser = JSON.parse(userData);
       setCurrentUser(cachedUser);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-      // Validate in background (non-blocking)
       const validateInBackground = async () => {
         try {
           const response = await axios.get('http://localhost:5050/poc/api/auth/validate', {
@@ -166,7 +103,6 @@ function AppContent() {
           });
 
           if (!response.data.valid) {
-            // Token is invalid - logout
             localStorage.removeItem('authToken');
             localStorage.removeItem('user');
             setCurrentUser(null);
@@ -174,16 +110,12 @@ function AppContent() {
               navigate('/login', { replace: true });
             }
           }
-          // If valid, do nothing - user is already logged in
         } catch (error) {
-          // Network errors - don't logout, just log
           console.warn('Background validation failed:', error.message);
-          // User stays logged in with cached token
         }
       };
 
       validateInBackground();
-      fetchSalesPersons(token);
 
       if (location.pathname === '/login') {
         navigate('/dashboard', { replace: true });
@@ -202,12 +134,9 @@ function AppContent() {
   const handleLogin = (user) => {
     setCurrentUser(user);
     navigate('/dashboard');
-    // Set default auth header for all requests
     const token = localStorage.getItem('authToken');
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Fetch sales persons after login
-      fetchSalesPersons(token);
     }
   };
 
@@ -225,155 +154,18 @@ function AppContent() {
       delete axios.defaults.headers.common['Authorization'];
       setCurrentUser(null);
       navigate('/login');
-      // Clear sales persons data on logout
-      setSalesPersons([]);
     }
+  };
+
+  // Handle form submission success
+  const handleSubmissionSuccess = (data) => {
+    setSubmittedData(data);
+    navigate('/confirmation');
   };
 
   // Navigation functions
   const navigateTo = (view) => {
     navigate(`/${view}`);
-  };
-
-  // Live update & remove error
-  const handleChange = (field, value) => {
-    switch (field) {
-      case "salesPerson": setSalesPerson(value); break;
-      case "region": setRegion(value); break;
-      case "endCustomerType": setEndCustomerType(value); break;
-      case "processType": setProcessType(value); break;
-      case "companyName": setCompanyName(value); break;
-      case "spoc": setSpoc(value); break;
-      case "spocEmail": setSpocEmail(value); break;
-      case "designation": setDesignation(value); break;
-      case "mobileNumber": setMobileNumber(value); break;
-      case "usecase": setUsecase(value); break;
-      case "brief": setBrief(value); break;
-      case "partnerCompanyName": setPartnerCompanyName(value); break;
-      case "partnerSpoc": setPartnerSpoc(value); break;
-      case "partnerSpocEmail": setPartnerSpocEmail(value); break;
-      case "partnerDesignation": setPartnerDesignation(value); break;
-      case "partnerMobileNumber": setPartnerMobileNumber(value); break;
-      default: break;
-    }
-
-    setErrors(prevErrors => {
-      const newErrors = { ...prevErrors };
-      if (field === "mobileNumber" || field === "partnerMobileNumber") {
-        if (/^[0-9]{10}$/.test(value)) delete newErrors[field];
-      } else if (value) {
-        delete newErrors[field];
-      }
-      return newErrors;
-    });
-  };
-
-  // Form submit
-  const handleSubmit = () => {
-    let newErrors = {};
-
-    if (!salesPerson) newErrors.salesPerson = "Required";
-    if (!region) newErrors.region = "Required";
-    if (!endCustomerType) newErrors.endCustomerType = "Required";
-    if (!processType) newErrors.processType = "Required";
-    if (!companyName) newErrors.companyName = "Required";
-    if (!spoc) newErrors.spoc = "Required";
-    if (!spocEmail) newErrors.spocEmail = "Required";
-    if (!designation) newErrors.designation = "Required";
-    if (mobileNumber && !/^[0-9]{10}$/.test(mobileNumber)) {
-      newErrors.mobileNumber = "Must be 10 digits";
-    }
-    if (!usecase) newErrors.usecase = "Required";
-    if (!brief) newErrors.brief = "Required";
-
-    if (endCustomerType === "Partner") {
-      if (!partnerCompanyName) newErrors.partnerCompanyName = "Required";
-      if (!partnerSpoc) newErrors.partnerSpoc = "Required";
-      if (!partnerSpocEmail) newErrors.partnerSpocEmail = "Required";
-      if (!partnerDesignation) newErrors.partnerDesignation = "Required";
-      if (partnerMobileNumber && !/^[0-9]{10}$/.test(partnerMobileNumber)) {
-        newErrors.partnerMobileNumber = "Must be 10 digits";
-      }
-    }
-
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-
-    const payload = {
-      salesPerson,
-      region,
-      endCustomerType,
-      processType,
-      companyName,
-      spoc,
-      spocEmail,
-      designation,
-      mobileNumber,
-      usecase,
-      brief,
-      partnerCompanyName,
-      partnerSpoc,
-      partnerSpocEmail,
-      partnerDesignation,
-      partnerMobileNumber,
-    };
-
-    setLoading(true);
-    const token = localStorage.getItem('authToken');
-
-    fetch("http://localhost:5050/poc/save", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      body: JSON.stringify(payload),
-    })
-      .then(async (res) => {
-        if (res.status === 401) {
-          handleLogout();
-          throw new Error("Session expired. Please login again.");
-        }
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(errorText || "Unknown error");
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data && data.id) {
-          setSubmittedData(data);
-          navigate('/confirmation');
-
-          // Reset form
-          setSalesPerson("");
-          setRegion("");
-          setEndCustomerType("");
-          setProcessType("");
-          setCompanyName("");
-          setSpoc("");
-          setSpocEmail("");
-          setDesignation("");
-          setMobileNumber("");
-          setUsecase("");
-          setBrief("");
-          setPartnerCompanyName("");
-          setPartnerSpoc("");
-          setPartnerSpocEmail("");
-          setPartnerDesignation("");
-          setPartnerMobileNumber("");
-          setErrors({});
-        } else {
-          alert("⚠️ POC creation failed (no ID returned).");
-        }
-      })
-      .catch((err) => {
-        console.error("Error saving POC:", err);
-        alert("❌ POC creation failed: " + err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
   };
 
   // Protected Route component
@@ -390,227 +182,242 @@ function AppContent() {
     return children;
   };
 
-  // Render POC Form
-  const renderPocForm = () => {
-    return (
-      <div>
-        <div className="header-bar">
-          <Pageheading />
-          <div className="user-info">
-            <span>Welcome, {currentUser?.username}</span>
-            <button onClick={() => navigate('/dashboard')} className="nav-btn">Dashboard</button>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
-          </div>
-        </div>
-
-        <div className="section-container">
-          <h2 className="section-title">Initiate New POC</h2>
-        </div>
-
-        {/* AE Sales Info Section */}
-        <div className="section-container">
-          <h2 className="section-title">AE Sales Info</h2>
-          <div className="dropdown-row">
-            <Dropdown
-              label="Sales Person Name"
-              options={salesPersons}
-              value={salesPerson}
-              onChange={(val) => handleChange("salesPerson", val)}
-              error={errors.salesPerson}
-              loading={loadingSalesPersons}
-              placeholder={loadingSalesPersons ? "Loading sales persons..." : "Select sales person"}
-            />
-            <Dropdown
-              label="Region"
-              options={regions}
-              value={region}
-              onChange={(val) => handleChange("region", val)}
-              error={errors.region}
-            />
-            <Dropdown
-              label="End Customer Type"
-              options={endCustomerTypes}
-              value={endCustomerType}
-              onChange={(val) => handleChange("endCustomerType", val)}
-              error={errors.endCustomerType}
-            />
-            <Dropdown
-              label="Process Type"
-              options={processTypes}
-              value={processType}
-              onChange={(val) => handleChange("processType", val)}
-              error={errors.processType}
-            />
-          </div>
-        </div>
-
-        {/* Partner Info Section */}
-        {endCustomerType === "Partner" && (
-          <div className="section-container">
-            <h2 className="section-title">Partner Info</h2>
-            <div className="input-row">
-              <TextInput
-                label="Partner Company Name"
-                value={partnerCompanyName}
-                onChange={(val) => handleChange("partnerCompanyName", val)}
-                error={errors.partnerCompanyName}
-                required={true}
-              />
-              <TextInput
-                label="Partner SPOC"
-                value={partnerSpoc}
-                onChange={(val) => handleChange("partnerSpoc", val)}
-                error={errors.partnerSpoc}
-                required={true}
-              />
-              <TextInput
-                label="Partner SPOC Email"
-                value={partnerSpocEmail}
-                onChange={(val) => handleChange("partnerSpocEmail", val)}
-                error={errors.partnerSpocEmail}
-                required={true}
-              />
-              <TextInput
-                label="Partner Designation"
-                value={partnerDesignation}
-                onChange={(val) => handleChange("partnerDesignation", val)}
-                error={errors.partnerDesignation}
-                required={true}
-              />
-              <TextInput
-                label="Partner Mobile Number"
-                value={partnerMobileNumber}
-                onChange={(val) => handleChange("partnerMobileNumber", val)}
-                error={errors.partnerMobileNumber}
-                required={false}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Customer Info Section */}
-        <div className="section-container">
-          <h2 className="section-title">Customer Info</h2>
-          <div className="input-row">
-            <TextInput
-              label="Company Name"
-              value={companyName}
-              onChange={(val) => handleChange("companyName", val)}
-              error={errors.companyName}
-              required={true}
-            />
-            <TextInput
-              label="SPOC"
-              value={spoc}
-              onChange={(val) => handleChange("spoc", val)}
-              error={errors.spoc}
-              required={true}
-            />
-            <TextInput
-              label="SPOC Email"
-              value={spocEmail}
-              onChange={(val) => handleChange("spocEmail", val)}
-              error={errors.spocEmail}
-              required={true}
-            />
-            <TextInput
-              label="Designation"
-              value={designation}
-              onChange={(val) => handleChange("designation", val)}
-              error={errors.designation}
-              required={true}
-            />
-            <TextInput
-              label="Mobile Number"
-              value={mobileNumber}
-              onChange={(val) => handleChange("mobileNumber", val)}
-              error={errors.mobileNumber}
-              required={false}
-            />
-          </div>
-        </div>
-
-        {/* Usecase Details Section */}
-        <UsecaseDetails
-          usecase={usecase}
-          setUsecase={(val) => handleChange("usecase", val)}
-          brief={brief}
-          setBrief={(val) => handleChange("brief", val)}
-          errors={errors}
-          required={true}
-        />
-
-        {/* Submit Button */}
-        <Button
-          onClick={handleSubmit}
-          label={loading ? "Please wait..." : "Initiate POC"}
-          type="submit"
-          disabled={loading || loadingSalesPersons}
-        />
-      </div>
-    );
-  };
-
   // Render Confirmation Screen
   const renderConfirmation = () => {
+    console.log('Confirmation data:', submittedData);
+
     if (!submittedData) {
       return (
         <div className="confirmation-container">
           <h2>No submission data found</h2>
-          <Button onClick={() => navigate('/initiate')} label="Back to POC Form" />
+          <button onClick={() => navigate('/initiate')} className="nav-btn">Back to POC Form</button>
         </div>
       );
     }
 
     return (
       <div className="confirmation-container">
-        <div className="header-bar">
-          <span>Welcome, {currentUser?.username}</span>
-          <div>
-            <button onClick={() => navigate('/dashboard')} className="nav-btn">Dashboard</button>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
+        {/* Header with AppBar similar to other components */}
+        <AppBar position="sticky" elevation={1}>
+          <Toolbar>
+            <IconButton
+              edge="start"
+              color="inherit"
+              aria-label="open drawer"
+              onClick={() => navigate('/dashboard')}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Typography
+              component="h1"
+              variant="h6"
+              color="inherit"
+              noWrap
+              sx={{ flexGrow: 1 }}
+            >
+              POC Created Successfully
+            </Typography>
+            <Typography variant="body2" color="inherit" sx={{ mr: 2 }}>
+              Welcome, {currentUser?.emp_name}
+              {currentUser?.emp_id && ` (${currentUser.emp_id})`}
+            </Typography>
+            <MuiButton
+              color="inherit"
+              onClick={() => navigate('/poc-records')}
+              sx={{ mr: 2, cursor: 'pointer' }}
+            >
+              POC Records
+            </MuiButton>
+            <MuiButton
+              color="inherit"
+              onClick={handleLogout}
+              sx={{ cursor: 'pointer' }}
+            >
+              Logout
+            </MuiButton>
+          </Toolbar>
+        </AppBar>
+
+        <div className="form-container">
+          <div className="section-container">
+            <Typography variant="h4" component="h2" gutterBottom align="center" color="primary">
+              ✅ POC Created Successfully
+            </Typography>
+            <Typography variant="subtitle1" align="center" color="textSecondary" gutterBottom>
+              Your POC has been initiated with ID: <strong>{submittedData.id || 'N/A'}</strong>
+            </Typography>
           </div>
-        </div>
 
-        <h2 className="confirmation-title">✅ POC Created Successfully</h2>
+          {/* POC Details Table using Material-UI */}
+          <div className="section-container">
+            <Typography variant="h5" component="h3" gutterBottom>
+              POC Details
+            </Typography>
 
-        <div className="confirmation-table-container">
-          <table className="poc-table">
-            <tbody>
-              <tr><th>ID</th><td>{submittedData.id}</td></tr>
-              <tr><th>Sales Person</th><td>{submittedData.salesPerson}</td></tr>
-              <tr><th>Region</th><td>{submittedData.region}</td></tr>
-              <tr><th>End Customer Type</th><td>{submittedData.endCustomerType}</td></tr>
-              <tr><th>Process Type</th><td>{submittedData.processType}</td></tr>
-              <tr><th>Customer Company</th><td>{submittedData.companyName}</td></tr>
-              <tr><th>Customer SPOC</th><td>{submittedData.spoc}</td></tr>
-              <tr><th>Customer SPOC Email</th><td>{submittedData.spocEmail}</td></tr>
-              <tr><th>Designation</th><td>{submittedData.designation}</td></tr>
-              <tr><th>Mobile</th><td>{submittedData.mobileNumber}</td></tr>
-              <tr><th>Use Case</th><td>{submittedData.usecase}</td></tr>
-              <tr><th>Brief</th><td>{submittedData.brief}</td></tr>
+            <Paper elevation={2} sx={{ width: '100%', overflow: 'hidden' }}>
+              <TableContainer>
+                <Table aria-label="poc details table">
+                  <TableBody>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold', width: '30%' }}>
+                        POC ID
+                      </TableCell>
+                      <TableCell>{submittedData.id || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Sales Person
+                      </TableCell>
+                      <TableCell>{submittedData.salesPerson || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Region
+                      </TableCell>
+                      <TableCell>{submittedData.region || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        End Customer Type
+                      </TableCell>
+                      <TableCell>{submittedData.endCustomerType || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Process Type
+                      </TableCell>
+                      <TableCell>{submittedData.processType || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Customer Company
+                      </TableCell>
+                      <TableCell>{submittedData.companyName || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Customer SPOC
+                      </TableCell>
+                      <TableCell>{submittedData.spoc || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        SPOC Email
+                      </TableCell>
+                      <TableCell>{submittedData.spocEmail || 'N/A'}</TableCell>
+                    </TableRow>
+                    {submittedData.designation && (
+                      <TableRow>
+                        <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                          Designation
+                        </TableCell>
+                        <TableCell>{submittedData.designation}</TableCell>
+                      </TableRow>
+                    )}
+                    {submittedData.mobileNumber && (
+                      <TableRow>
+                        <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                          Mobile Number
+                        </TableCell>
+                        <TableCell>{submittedData.mobileNumber}</TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Use Case
+                      </TableCell>
+                      <TableCell>{submittedData.usecase || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Brief Description
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'pre-wrap' }}>{submittedData.brief || 'N/A'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                        Remark
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'pre-wrap' }}>{submittedData.remark || 'N/A'}</TableCell>
+                    </TableRow>
 
-              {submittedData.endCustomerType === "Partner" && (
-                <>
-                  <tr><th>Partner Company</th><td>{submittedData.partnerCompanyName}</td></tr>
-                  <tr><th>Partner SPOC</th><td>{submittedData.partnerSpoc}</td></tr>
-                  <tr><th>Partner SPOC Email</th><td>{submittedData.partnerSpocEmail}</td></tr>
-                  <tr><th>Partner Designation</th><td>{submittedData.partnerDesignation}</td></tr>
-                  <tr><th>Partner Mobile</th><td>{submittedData.partnerMobileNumber}</td></tr>
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    {submittedData.endCustomerType === "Partner" && (
+                      <>
+                        <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                          <TableCell colSpan={2} sx={{ fontWeight: 'bold', textAlign: 'center', color: 'primary.main' }}>
+                            Partner Information
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                            Partner Company
+                          </TableCell>
+                          <TableCell>{submittedData.partnerCompanyName || 'N/A'}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                            Partner SPOC
+                          </TableCell>
+                          <TableCell>{submittedData.partnerSpoc || 'N/A'}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                            Partner SPOC Email
+                          </TableCell>
+                          <TableCell>{submittedData.partnerSpocEmail || 'N/A'}</TableCell>
+                        </TableRow>
+                        {submittedData.partnerDesignation && (
+                          <TableRow>
+                            <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                              Partner Designation
+                            </TableCell>
+                            <TableCell>{submittedData.partnerDesignation}</TableCell>
+                          </TableRow>
+                        )}
+                        {submittedData.partnerMobileNumber && (
+                          <TableRow>
+                            <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
+                              Partner Mobile
+                            </TableCell>
+                            <TableCell>{submittedData.partnerMobileNumber}</TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </div>
 
-        <div className="confirmation-buttons">
-          <Button
-            onClick={() => {
-              navigate('/initiate');
-            }}
-            label="New POC"
-          />
-          <Button onClick={() => navigate('/dashboard')} label="Back to Dashboard" />
+          {/* Action Buttons */}
+          <div className="section-container">
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <MuiButton
+                variant="contained"
+                color="primary"
+                onClick={() => navigate('/initiate')}
+                size="large"
+              >
+                Create New POC
+              </MuiButton>
+              <MuiButton
+                variant="outlined"
+                onClick={() => navigate('/poc-records')}
+                size="large"
+              >
+                View All POC Records
+              </MuiButton>
+              <MuiButton
+                variant="outlined"
+                onClick={() => navigate('/dashboard')}
+                size="large"
+              >
+                Back to Dashboard
+              </MuiButton>
+            </Box>
+          </div>
         </div>
       </div>
     );
@@ -623,7 +430,6 @@ function AppContent() {
   return (
     <div className="app">
       <Routes>
-        {/* Public Route - Login */}
         <Route
           path="/login"
           element={
@@ -633,7 +439,6 @@ function AppContent() {
           }
         />
 
-        {/* Protected Routes */}
         <Route
           path="/dashboard"
           element={
@@ -646,6 +451,7 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/poc-table"
           element={
@@ -659,16 +465,49 @@ function AppContent() {
           }
         />
 
-        {/* POC Form Route */}
+        <Route
+          path="/status-tracker"
+          element={
+            <ProtectedRoute>
+              <StatusComponent
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/initiate"
           element={
             <ProtectedRoute>
-              {renderPocForm()}
+              <InitiateUsecase
+                currentUser={currentUser}
+                onLogout={handleLogout}
+                navigate={navigate}
+                fetchSalesPersons={fetchSalesPersons}
+                processApiData={processApiData}
+                onSubmissionSuccess={handleSubmissionSuccess}
+              />
             </ProtectedRoute>
           }
         />
-         <Route
+
+        <Route
+          path="/poc-records"
+          element={
+            <ProtectedRoute>
+              <InitiateUsecaseTable
+                currentUser={currentUser}
+                navigate={navigate}
+                handleLogout={handleLogout}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/report"
           element={
             <ProtectedRoute>
@@ -682,6 +521,20 @@ function AppContent() {
         />
 
         <Route
+          path="/edit-poc"
+          element={
+            <InitiateUsecaseEdit
+              currentUser={currentUser}
+              onLogout={handleLogout}
+              navigate={navigate}
+              fetchSalesPersons={fetchSalesPersons}
+              onSubmissionSuccess={handleSubmissionSuccess}
+              editRecord={location.state?.editRecord} // Pass the record to edit
+            />
+          }
+        />
+
+        <Route
           path="/confirmation"
           element={
             <ProtectedRoute>
@@ -690,11 +543,7 @@ function AppContent() {
           }
         />
 
-
-        {/* Redirect root to login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Catch all route */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>

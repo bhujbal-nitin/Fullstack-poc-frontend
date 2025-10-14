@@ -112,6 +112,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const idPrefixOptions = [
         'POC',
         'POP',
+        'PRJ Usecase',
         'PartnerSupport',
         'FeasibilityCheck',
         'OperationalSupport',
@@ -123,7 +124,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         'Internal',
         'Event',
         'Workshop',
-        'Support'
+        'Support',
+        'Vco Create'
     ];
 
     // Function to get emp_name from localStorage
@@ -902,6 +904,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 options={[
                                     'POC',
                                     'POP',
+                                    'PRJ Usecase',
                                     'Partner Support',
                                     'Feasibility Check',
                                     'Operational Support',
@@ -913,7 +916,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                     'Internal',
                                     'Event',
                                     'Workshop',
-                                    'Support'
+                                    'Support',
+                                    'Vco Create'
                                 ]}
                                 value={pocType}
                                 onChange={setPocType}

@@ -51,13 +51,19 @@ import {
     ViewColumn as ViewColumnIcon,
     FilterList as FilterListIcon,
     Clear as ClearIcon,
-    Close as CloseIcon
+    Close as CloseIcon,
+    Dashboard as DashboardIcon
 } from '@mui/icons-material';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { yellow as yellowColor } from '@mui/material/colors';
 import axios from 'axios';
 
 // Import the form components
 import PocPrjId from './PocPrjId';
 import PocPrjIdEdit from './PocPrjIdEdit';
+
+
+
 
 const PocTable = ({ onNavigate, onLogout, user }) => {
     console.log('PocTable component mounted');
@@ -76,6 +82,9 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     const [pocToDelete, setPocToDelete] = React.useState(null);
     const [pocToEdit, setPocToEdit] = React.useState(null);
     const [snackbar, setSnackbar] = React.useState({ open: false, message: '', severity: 'success' });
+    // Add these state variables after other state declarations
+    const [rowSelection, setRowSelection] = React.useState({});
+    const [exportMenuAnchor, setExportMenuAnchor] = React.useState(null);
 
     // Column selection state
     const [columnMenuAnchor, setColumnMenuAnchor] = React.useState(null);
@@ -85,10 +94,11 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         assignedTo: false,
         startDate: true,
         endDate: true,
-        actualStartDate: true,
-        actualEndDate: true,
+        actualStartDate: false,
+        actualEndDate: false,
         status: true,
         remark: true,
+        totalWorkedHours: true,
         entityType: false,
         entityName: true,
         salesPerson: false,
@@ -131,7 +141,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         approvedBy: '',
         totalEfforts: '',
         varianceDays: '',
-        remark: ''
+        remark: '',
+        totalWorkedHours: ''
     });
 
     // Filter popover state
@@ -158,6 +169,148 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setPocToEdit(null);
         validateToken();
     };
+
+    // Handle row selection
+    const handleRowSelect = (pocId) => {
+        setRowSelection(prev => ({
+            ...prev,
+            [pocId]: !prev[pocId]
+        }));
+    };
+
+    // Handle select all on current page
+    const handleSelectAllOnPage = () => {
+        const allSelectedOnPage = paginatedData.every(poc => rowSelection[poc.pocId]);
+
+        if (allSelectedOnPage) {
+            // If all are selected, deselect all on current page
+            const newSelection = { ...rowSelection };
+            paginatedData.forEach(poc => {
+                delete newSelection[poc.pocId];
+            });
+            setRowSelection(newSelection);
+        } else {
+            // If not all are selected, select all on current page
+            const newSelection = { ...rowSelection };
+            paginatedData.forEach(poc => {
+                newSelection[poc.pocId] = true;
+            });
+            setRowSelection(newSelection);
+        }
+    };
+
+    // Handle deselect all
+    const handleDeselectAll = () => {
+        setRowSelection({});
+    };
+
+    // Get selected rows
+    const getSelectedRows = () => {
+        return pocData.filter(poc => rowSelection[poc.pocId]);
+    };
+
+    // Export to CSV function - Export ALL columns by default
+    const exportToCSV = (data, filename) => {
+        if (!data || data.length === 0) return;
+
+        // Always use all columns regardless of visibility
+        const columnsToExport = Object.entries(columnConfig);
+
+        const headers = columnsToExport.map(([key, config]) => config.label);
+
+        const csvData = data.map(poc => {
+            return columnsToExport.map(([key, config]) => {
+                let value = poc[key];
+
+                // Handle special rendering cases
+                if (config.render) {
+                    // For rendered values, get the text content
+                    if (key === 'status') {
+                        return poc.status || 'Draft';
+                    } else if (key === 'isBillable') {
+                        return poc.isBillable ? 'Billable' : 'Non-Billable';
+                    } else if (key === 'remark') {
+                        return poc.remark || '';
+                    } else if (key === 'pocId') {
+                        return poc.pocId;
+                    } else if (key === 'totalWorkedHours') {
+                        const hours = poc.totalWorkedHours;
+                        if (hours === null || hours === undefined || hours === '') return '';
+                        const totalHours = parseFloat(hours);
+                        if (isNaN(totalHours)) return '';
+                        const wholeHours = Math.floor(totalHours);
+                        const minutes = Math.round((totalHours - wholeHours) * 60);
+                        return `${wholeHours}:${minutes.toString().padStart(2, '0')}`;
+                    }
+                }
+
+                // Handle date fields
+                if (key.includes('Date') && value) {
+                    return formatDate(value);
+                }
+
+                // Handle null/undefined values
+                if (value === null || value === undefined) return '';
+
+                return value.toString();
+            });
+        });
+
+        const csvContent = [
+            headers,
+            ...csvData
+        ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // Export handlers - all now export ALL columns
+    const handleExportSelected = () => {
+        const selectedRows = getSelectedRows();
+        if (selectedRows.length === 0) {
+            showSnackbar('No rows selected for export', 'warning');
+            return;
+        }
+        exportToCSV(selectedRows, `selected-usecases-${new Date().toISOString().split('T')[0]}.csv`);
+        setExportMenuAnchor(null);
+        showSnackbar(`Exported ${selectedRows.length} rows to CSV with all columns`, 'success');
+    };
+
+    const handleExportAll = () => {
+        exportToCSV(filteredData, `all-usecases-${new Date().toISOString().split('T')[0]}.csv`);
+        setExportMenuAnchor(null);
+        showSnackbar(`Exported all ${filteredData.length} rows to CSV with all columns`, 'success');
+    };
+
+    const handleExportPage = () => {
+        exportToCSV(paginatedData, `page-usecases-${new Date().toISOString().split('T')[0]}.csv`);
+        setExportMenuAnchor(null);
+        showSnackbar(`Exported page ${page + 1} rows to CSV with all columns`, 'success');
+    };
+
+
+    // Export menu handlers
+    const handleOpenExportMenu = (event) => {
+        setExportMenuAnchor(event.currentTarget);
+    };
+
+    const handleCloseExportMenu = () => {
+        setExportMenuAnchor(null);
+    };
+
+    // Check if any rows are selected
+    const hasSelectedRows = Object.keys(rowSelection).some(key => rowSelection[key]);
+
+
+
     // Add token validation function
     const validateToken = async () => {
         const token = localStorage.getItem('authToken');
@@ -326,7 +479,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             poc.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.tags?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.approvedBy?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.status?.toLowerCase().includes(searchTerm.toLowerCase());
+            poc.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.totalWorkedHours?.toString().toLowerCase().includes(searchTerm.toLowerCase());
 
         // Column filters
         const matchesColumnFilters = Object.entries(columnFilters).every(([column, filterValue]) => {
@@ -435,20 +589,54 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setSnackbar({ ...snackbar, open: false });
     };
 
+
+    const themeNew = createTheme({
+        palette: {
+            // you might already have primary, secondary, etc.
+            yellow: {
+                main: yellowColor[500],
+                light: yellowColor[300],
+                dark: yellowColor[700],
+                contrastText: '#000',   // choose black if yellow is light
+            },
+        },
+    });
+
+
+
+    // const getStatusColor = (status) => {
+    //     switch (status?.toLowerCase()) {
+    //         case 'completed': return 'success';
+    //         case 'in progress': return 'warning';
+    //         case 'pending': return 'secondary';
+    //         case 'dropped': return 'error';
+    //         case 'draft': return 'default';
+    //         case 'awaiting': return 'info';
+    //         case 'hold': return 'yellow'; // Changed from 'secondary' to 'warning'
+    //         case 'closed': return 'error';
+    //         case 'converted': return 'success';
+    //         default: return 'default';
+    //     }
+    // };
+
+
     const getStatusColor = (status) => {
         switch (status?.toLowerCase()) {
-            case 'completed': return 'success';
-            case 'in progress': return 'warning';
-            case 'pending': return 'default';
-            case 'cancelled': return 'error';
-            case 'draft': return 'secondary';
-            case 'awaiting': return 'info';
-            case 'hold': return 'secondary';
-            case 'closed': return 'error';
-            case 'converted': return 'success';
-            default: return 'default';
+            case 'completed': return { muiColor: 'success' };
+            case 'in progress': return { muiColor: 'warning' };
+            case 'pending': return { muiColor: 'secondary' };
+            case 'dropped': return { muiColor: 'error' };
+            case 'draft': return { muiColor: 'default' };
+            case 'awaiting': return { muiColor: 'info' };
+            case 'hold': return { customColor: 'yellow', textColor: 'black' };
+            case 'closed': return { customColor: 'cyan', textColor: 'black' };
+            case 'converted': return { customColor: 'lawngreen', textColor: 'black' };
+            default: return { muiColor: 'default' };
         }
     };
+
+
+
 
     const getBillableChip = (isBillable) => {
         return (
@@ -510,14 +698,14 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setVisibleColumns(allFalse);
     };
 
-    
+
 
     // Add this state for editing status
     const [editingStatus, setEditingStatus] = React.useState(null);
     const [statusMenuAnchor, setStatusMenuAnchor] = React.useState(null);
 
     // Status options
-    const statusOptions = ['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled',  'Awaiting', 'Hold', 'Closed', 'Converted'];
+    const statusOptions = ['Draft', 'Pending', 'In Progress', 'Completed', 'Dropped', 'Awaiting', 'Hold', 'Closed', 'Converted'];
 
 
     // Function to handle status change
@@ -595,25 +783,51 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         endDate: { label: 'End Date', truncate: false, render: (poc) => formatDate(poc.endDate) },
         actualStartDate: { label: 'Actual Start Date', truncate: false, render: (poc) => formatDate(poc.actualStartDate) },
         actualEndDate: { label: 'Actual End Date', truncate: false, render: (poc) => formatDate(poc.actualEndDate) },
+        totalWorkedHours: {
+            label: 'Worked Hours',
+            truncate: false,
+            render: (poc) => {
+                const hours = poc.totalWorkedHours;
+                if (hours === null || hours === undefined || hours === '') return '-';
+
+                const totalHours = parseFloat(hours);
+                if (isNaN(totalHours)) return '-';
+
+                // Convert to hours and minutes
+                const wholeHours = Math.floor(totalHours);
+                const minutes = Math.round((totalHours - wholeHours) * 60);
+
+                // Format as HH:MM
+                return `${wholeHours}:${minutes.toString().padStart(2, '0')}`;
+            }
+        },
         status: {
             label: 'Status',
             truncate: false,
-            render: (poc) => (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Chip
-                        label={poc.status || 'Draft'}
-                        color={getStatusColor(poc.status)}
-                        size="small"
-                        onClick={(e) => handleOpenStatusMenu(e, poc)}
-                        sx={{
-                            cursor: 'pointer',
-                            '&:hover': {
-                                opacity: 0.8
-                            }
-                        }}
-                    />
-                </Box>
-            )
+            render: (poc) => {
+                const { muiColor, customColor, textColor } = getStatusColor(poc.status);
+
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Chip
+                            label={poc.status || 'Draft'}
+                            size="small"
+                            onClick={(e) => handleOpenStatusMenu(e, poc)}
+                            color={muiColor} // only applies if defined
+                            sx={{
+                                ...(customColor && { backgroundColor: customColor, color: textColor || '#fff' }),
+                                cursor: 'pointer',
+                                '&:hover': { opacity: 0.8 }
+                            }}
+                        />
+                    </Box>
+                )
+
+            }
+
+
+
+
         },
         remark: {
             label: 'Remark',
@@ -666,7 +880,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             )
         },
         entityType: { label: 'Client Type', truncate: false },
-        
+
         salesPerson: { label: 'Sales Person', truncate: false },
         region: { label: 'Region', truncate: false },
         isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
@@ -679,10 +893,9 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         estimatedEfforts: { label: 'Estimated Efforts', truncate: false },
         approvedBy: { label: 'Approved By', truncate: false },
         totalEfforts: { label: 'Total Efforts', truncate: false },
-        varianceDays: { label: 'Variance Days', truncate: false }
+        varianceDays: { label: 'Variance Days', truncate: false },
+
     };
-
-
 
 
     const [editingRemark, setEditingRemark] = React.useState(null);
@@ -736,15 +949,16 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             {/* App Bar */}
             <AppBar position="static" elevation={1} sx={{ bgcolor: theme.palette.primary.main }}>
                 <Toolbar>
-                    <IconButton
-                        edge="start"
+
+                    <Button
                         color="inherit"
-                        aria-label="open drawer"
                         onClick={() => onNavigate('dashboard')}
+                        startIcon={<DashboardIcon />}
                         sx={{ mr: 2 }}
                     >
-                        <MenuIcon />
-                    </IconButton>
+                        Dashboard
+                    </Button>
+
                     <Typography
                         component="h1"
                         variant="h6"
@@ -756,6 +970,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                     </Typography>
                     <Typography variant="body2" color="inherit" sx={{ mr: 2 }}>
                         Welcome, {user?.emp_name}
+                        {user?.emp_id && ` (${user.emp_id})`}
                     </Typography>
                     <Button color="inherit" onClick={onLogout}>Logout</Button>
                 </Toolbar>
@@ -781,6 +996,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                         </Typography>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+
                             <TextField
                                 placeholder="Search Usecase codes..."
                                 variant="outlined"
@@ -796,6 +1012,16 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                 }}
                                 sx={{ width: 250 }}
                             />
+
+                            <Button
+                                variant="outlined"
+                                startIcon={<ViewColumnIcon />}
+                                onClick={handleOpenExportMenu}
+                                size="small"
+                                disabled={!hasSelectedRows && filteredData.length === 0}
+                            >
+                                Export Options
+                            </Button>
 
                             {hasActiveFilters() && (
                                 <Tooltip title="Clear all filters">
@@ -847,6 +1073,20 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                     <Table stickyHeader aria-label="poc table" size="small" sx={{ minWidth: 1000 }}>
                                         <TableHead>
                                             <TableRow>
+                                                {/* Add selection column */}
+                                                <TableCell padding="checkbox" sx={{
+                                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                    fontWeight: 'bold'
+                                                }}>
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={paginatedData.length > 0 && paginatedData.every(poc => rowSelection[poc.pocId])}
+                                                        indeterminate={paginatedData.some(poc => rowSelection[poc.pocId]) && !paginatedData.every(poc => rowSelection[poc.pocId])}
+                                                        onChange={handleSelectAllOnPage}
+                                                        sx={{ cursor: 'pointer' }}
+                                                    />
+                                                </TableCell>
+
                                                 {Object.entries(columnConfig).map(([key, config]) =>
                                                     visibleColumns[key] && (
                                                         <TableCell key={key} sx={{
@@ -889,7 +1129,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                         <TableBody>
                                             {paginatedData.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={Object.keys(visibleColumns).filter(k => visibleColumns[k]).length + 1} align="center" sx={{ py: 3 }}>
+                                                    <TableCell colSpan={Object.keys(visibleColumns).filter(k => visibleColumns[k]).length + 2} align="center" sx={{ py: 3 }}>
                                                         <Typography variant="body1" color="textSecondary">
                                                             {searchTerm || Object.values(columnFilters).some(f => f)
                                                                 ? 'No matching Usecase codes found'
@@ -902,12 +1142,26 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                     <TableRow
                                                         key={poc.pocId}
                                                         hover
+                                                        selected={rowSelection[poc.pocId]}
                                                         sx={{
                                                             '&:nth-of-type(even)': {
                                                                 bgcolor: alpha(theme.palette.primary.main, 0.02)
+                                                            },
+                                                            '&.Mui-selected': {
+                                                                bgcolor: alpha(theme.palette.primary.main, 0.1)
                                                             }
                                                         }}
                                                     >
+                                                        {/* Selection checkbox */}
+                                                        <TableCell padding="checkbox">
+                                                            <Checkbox
+                                                                size="small"
+                                                                checked={!!rowSelection[poc.pocId]}
+                                                                onChange={() => handleRowSelect(poc.pocId)}
+                                                                sx={{ cursor: 'pointer' }}
+                                                            />
+                                                        </TableCell>
+
                                                         {Object.entries(columnConfig).map(([key, config]) =>
                                                             visibleColumns[key] && (
                                                                 <TableCell key={key} sx={{ whiteSpace: 'nowrap' }}>
@@ -964,6 +1218,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                     </Table>
                                 </TableContainer>
 
+
+
                                 {/* Pagination */}
                                 <Box sx={{
                                     display: 'flex',
@@ -992,6 +1248,40 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                     </Box>
                 </Card>
             </Box>
+
+            <Menu
+                anchorEl={exportMenuAnchor}
+                open={Boolean(exportMenuAnchor)}
+                onClose={handleCloseExportMenu}
+            >
+                <MenuItem
+                    onClick={handleExportSelected}
+                    disabled={!hasSelectedRows}
+                >
+                    <ListItemText
+                        primary="Export Selected Rows"
+                        secondary={hasSelectedRows ? `${getSelectedRows().length} rows selected` : 'No rows selected'}
+                    />
+                </MenuItem>
+                <MenuItem onClick={handleExportPage}>
+                    <ListItemText
+                        primary="Export Current Page"
+                        secondary={`${paginatedData.length} rows`}
+                    />
+                </MenuItem>
+                <MenuItem onClick={handleExportAll}>
+                    <ListItemText
+                        primary="Export All Data"
+                        secondary={`${filteredData.length} rows - ${Object.keys(columnConfig).length} columns`}
+                    />
+                </MenuItem>
+                {hasSelectedRows && (
+                    <MenuItem onClick={handleDeselectAll}>
+                        <ListItemText primary="Clear Selection" />
+                    </MenuItem>
+                )}
+            </Menu>
+
 
             {/* Column Selection Menu */}
             <Menu
@@ -1100,20 +1390,28 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                     },
                 }}
             >
-                {statusOptions.map((status) => (
-                    <MenuItem
-                        key={status}
-                        onClick={() => handleStatusChange(editingStatus, status)}
-                        selected={editingStatus?.status === status}
-                    >
-                        <Chip
-                            label={status}
-                            color={getStatusColor(status)}
-                            size="small"
-                            sx={{ width: '100%', justifyContent: 'center' }}
-                        />
-                    </MenuItem>
-                ))}
+                {statusOptions.map((status) => {
+                    const { muiColor, customColor, textColor } = getStatusColor(status);
+                    return (
+                        <MenuItem
+                            key={status}
+                            onClick={() => handleStatusChange(editingStatus, status)}
+                            selected={editingStatus?.status === status}
+                        >
+                            <Chip
+                                label={status}
+                                size="small"
+                                color={muiColor}
+                                sx={{
+                                    width: '100%',
+                                    justifyContent: 'center',
+                                    ...(customColor && { backgroundColor: customColor, color: textColor || '#fff' })
+                                }}
+                            />
+                        </MenuItem>
+                    );
+                }
+                )}
             </Menu>
 
             {/* Modal for PocPrjId */}
@@ -1138,20 +1436,41 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </DialogContent>
             </Dialog>
 
+
             {/* Detail Dialog */}
-            <Dialog open={detailDialogOpen} onClose={handleCloseDetails} maxWidth="md" fullWidth>
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    Usecase Details - {selectedPoc?.pocId}
+            <Dialog
+                open={detailDialogOpen}
+                onClose={handleCloseDetails}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: { minHeight: '60vh' }
+                }}
+            >
+                <DialogTitle sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    bgcolor: 'primary.main',
+                    color: 'white'
+                }}>
+                    <Typography variant="h6">
+                        Usecase Details - {selectedPoc?.pocId}
+                    </Typography>
                     <IconButton
                         onClick={handleCloseDetails}
-                        sx={{ ml: 2 }}
+                        sx={{ color: 'white' }}
                     >
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
-                <DialogContent dividers>
-                    {selectedPoc && (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                <DialogContent dividers sx={{ p: 3 }}>
+                    {selectedPoc ? (
+                        <Box sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                            gap: 3
+                        }}>
                             <DetailItem label="Usecase ID" value={selectedPoc.pocId} />
                             <DetailItem label="Project Name" value={selectedPoc.pocName} />
                             <DetailItem label="Description" value={selectedPoc.description || '-'} />
@@ -1162,7 +1481,14 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Region" value={selectedPoc.region} />
                             <DetailItem label="SPOC Email" value={selectedPoc.spocEmail || '-'} />
                             <DetailItem label="SPOC Designation" value={selectedPoc.spocDesignation || '-'} />
-                            <DetailItem label="Billable" value={selectedPoc.isBillable ? 'Yes' : 'No'} />
+                            {/* <DetailItem label="Billable" value={selectedPoc.isBillable ? 'Yes' : 'No'} /> */}
+                            <DetailItem
+                                label="Billable"
+                                value={
+                                    selectedPoc.isBillable === null ? 'Not Specified' :
+                                        (selectedPoc.isBillable === true || selectedPoc.isBillable === 'Yes' ? 'Yes' : 'No')
+                                }
+                            />
                             <DetailItem label="Tags" value={selectedPoc.tags || '-'} />
                             <DetailItem label="Assigned To" value={selectedPoc.assignedTo} />
                             <DetailItem label="Created By" value={selectedPoc.createdBy} />
@@ -1174,33 +1500,54 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Approved By" value={selectedPoc.approvedBy || '-'} />
                             <DetailItem label="Total Efforts" value={formatNumber(selectedPoc.totalEfforts)} />
                             <DetailItem label="Variance Days" value={formatNumber(selectedPoc.varianceDays)} />
+                            <DetailItem label="Worked Hours" value={formatNumber(selectedPoc.totalWorkedHours)} />
                             <DetailItem label="Remark" value={selectedPoc.remark || '-'} />
-                            <DetailItem
-                                label="Status"
-                                value={selectedPoc.status || 'Draft'}
-                                render={(value) => (
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                        <Chip
-                                            label={value}
-                                            color={getStatusColor(value)}
-                                            size="small"
-                                            onClick={(e) => {
-                                                setStatusMenuAnchor(e.currentTarget);
-                                                setEditingStatus(selectedPoc);
-                                            }}
-                                            sx={{
-                                                cursor: 'pointer',
-                                                '&:hover': {
-                                                    opacity: 0.8
-                                                }
-                                            }}
-                                        />
-                                    </Box>
-                                )}
-                            />
+                            <Box sx={{ gridColumn: '1 / -1' }}>
+                                <DetailItem
+                                    label="Status"
+                                    value={selectedPoc.status || 'Draft'}
+                                    render={(value) => (
+                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <ThemeProvider theme={themeNew}>
+                                                <Chip
+                                                    label={value}
+                                                    color={getStatusColor(value).muiColor || 'default'}
+                                                    size="medium"
+                                                    sx={{
+                                                        cursor: 'pointer',
+                                                        '&:hover': {
+                                                            opacity: 0.8
+                                                        }
+                                                    }}
+                                                />
+                                            </ThemeProvider>
+                                        </Box>
+                                    )}
+                                />
+                            </Box>
+                        </Box>
+                    ) : (
+                        <Box sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: 200
+                        }}>
+                            <Typography variant="h6" color="textSecondary">
+                                No data available
+                            </Typography>
                         </Box>
                     )}
                 </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button
+                        onClick={handleCloseDetails}
+                        variant="contained"
+                        color="primary"
+                    >
+                        Close
+                    </Button>
+                </DialogActions>
             </Dialog>
 
             {/* Modal for PocPrjIdEdit */}
@@ -1259,7 +1606,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     );
 };
 
-// Helper component for detail view
+
 // Updated DetailItem component
 const DetailItem = ({ label, value, render }) => (
     <Box sx={{ mb: 1 }}>

@@ -103,6 +103,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     const idPrefixOptions = [
         'POC',
         'POP',
+        'PRJ Usecase',
         'PartnerSupport',
         'FeasibilityCheck',
         'OperationalSupport',
@@ -114,7 +115,8 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         'Internal',
         'Event',
         'Workshop',
-        'Support'
+        'Support',
+        'Vco Create'
     ];
 
     // Function to get emp_name from localStorage
@@ -194,7 +196,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                     const salesData = processApiData(salesResponse.data);
                     console.log(salesData)
-                    setSalesPersons(salesData.length > 0 ? salesData : ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
+                    setSalesPersons(salesData.length > 0 ? salesData : []);
                 } catch (salesError) {
                     console.error('Error fetching sales persons:', salesError);
                     setSalesPersons([]);
@@ -814,6 +816,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 options={[
                                     'POC',
                                     'POP',
+                                    'PRJ Usecase',
                                     'Partner Support',
                                     'Feasibility Check',
                                     'Operational Support',
@@ -825,7 +828,8 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                     'Internal',
                                     'Event',
                                     'Workshop',
-                                    'Support'
+                                    'Support',
+                                    'Vco Create'
                                 ]}
                                 value={pocType}
                                 onChange={setPocType}
