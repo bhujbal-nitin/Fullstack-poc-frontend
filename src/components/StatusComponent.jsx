@@ -39,6 +39,7 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    Popover,
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -57,6 +58,10 @@ import {
     Assignment as AssignmentIcon,
     Menu as MenuIcon,
 } from '@mui/icons-material';
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
+
 
 
 const authenticateToken = (req, res, next) => {
@@ -102,6 +107,32 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [calendarAnchor, setCalendarAnchor] = useState(null);
+    const [isCustomDate, setIsCustomDate] = useState(false);
+
+
+    // ✅ Replace existing handleCalendarOpen with this:
+    const handleCalendarOpen = (event) => {
+        // Instead of opening a dialog, directly trigger the calendar popover
+        setCalendarAnchor(event.currentTarget);
+    };
+
+
+    const handleCalendarClose = () => {
+        setCalendarAnchor(null);
+    };
+
+    const handleDateSelect = (date) => {
+        // Directly use the date from the input (it's already in YYYY-MM-DD format)
+        fetchTodayStatus(date);
+        handleCalendarClose();
+    };
+
+    const handleTodayClick = () => {
+        fetchTodayStatus();
+    };
 
 
 
@@ -191,10 +222,12 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         }
     };
 
-    const fetchTodayStatus = async () => {
+    const fetchTodayStatus = async (date = null) => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await axios.get('http://localhost:5050/poc/getTodayStatus', {
+            const targetDate = date || new Date().toISOString().split('T')[0];
+
+            const response = await axios.get(`http://localhost:5050/poc/getStatusByDate?date=${targetDate}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -217,8 +250,10 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             }));
 
             setTodayStatus(transformedData);
+            setSelectedDate(targetDate);
+            setIsCustomDate(!!date);
         } catch (error) {
-            console.error('Error fetching today\'s status:', error);
+            console.error('Error fetching status:', error);
             // Fallback data that matches the expected structure
             setTodayStatus([
                 {
@@ -524,14 +559,14 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                     display: 'flex',
                     flexDirection: isMobile ? 'column' : 'row',
                     gap: isMobile ? 2 : 3,
-                    alignItems: 'flex-start'
+                    alignItems: 'stretch', // Change from 'flex-start' to 'stretch'
+                    minHeight: '70vh' // Ensure parent has minimum height
                 }}>
                     {/* Status Form Section - Wider */}
                     <Box sx={{
-                        flex: isMobile ? '0 0 100%' : '0 0 50%', // 65% width on desktop
-                        width: '100%',
-                        maxWidth: isMobile ? '100%' : '65%'
-                    }} id="status-form-section">
+                        flex: isMobile ? '0 0 auto' : '1', // Use flex grow
+                        minHeight: isMobile ? 'auto' : '600px'
+                    }}>
                         <Zoom in={true} timeout={800}>
                             <Paper elevation={isMobile ? 2 : 8} sx={{
                                 p: isMobile ? 2 : 3,
@@ -729,7 +764,20 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                     onOpen={() => setLeadDropdownOpen(true)}
                                                     open={leadDropdownOpen}
                                                     input={<OutlinedInput label="Project Leads *" />}
-                                                    renderValue={() => `${statusData.leadIds.length} lead(s) selected`}
+                                                    renderValue={(selected) => {
+                                                        if (selected.length === 0) {
+                                                            return 'Select leads';
+                                                        }
+
+                                                        // Get the selected lead names
+                                                        const selectedLeadNames = selected.map(leadId => {
+                                                            const lead = leads.find(l => l.id === leadId);
+                                                            return lead ? lead.name : leadId;
+                                                        });
+
+                                                        // Show names, truncate if too long
+                                                        return selectedLeadNames.join(', ');
+                                                    }}
                                                     MenuProps={{
                                                         PaperProps: {
                                                             sx: {
@@ -789,7 +837,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                 fullWidth
                                                 multiline
                                                 rows={3}
-                                                label="Work Description *"
+                                                label="Work Description "
                                                 name="description"
                                                 value={statusData.description}
                                                 onChange={handleInputChange}
@@ -893,19 +941,18 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                         </Zoom>
                     </Box>
 
-                    {/* Today's Status Section - Narrower */}
+                    {/* Today's Status Section */}
                     <Box sx={{
-                        flex: isMobile ? '0 0 100%' : '0 0 45%', // 35% width on desktop
-                        width: '100%',
-                        maxWidth: isMobile ? '100%' : '45%'
+                        flex: isMobile ? '0 0 auto' : '1',
+                        minHeight: isMobile ? 'auto' : '600px', // Match the form section height
+                        display: 'flex',
+                        flexDirection: 'column'
                     }}>
                         <Slide direction="left" in={true} timeout={800}>
                             <Paper elevation={isMobile ? 2 : 8} sx={{
                                 p: isMobile ? 2 : 3,
                                 borderRadius: isMobile ? 2 : 3,
-                                height: 'fit-content',
-                                maxHeight: 'fit-content', // You can adjust this or remove it for full height
-                                overflow: 'hidden',
+                                height: 'fit-content', // Match the form section
                                 display: 'flex',
                                 flexDirection: 'column',
                                 background: 'linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%)',
@@ -923,29 +970,43 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                     background: 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)'
                                 }
                             }}>
-                                <Box sx={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                            <Box sx={{
+                                <Box sx={{
+                                    position: 'relative',
+                                    zIndex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}>
+                                    {/* Header Section */}
+                                    <Box sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        mb: 2
+                                    }}>
+                                        <Box
+                                            sx={{
                                                 background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
                                                 borderRadius: 2,
                                                 p: 1,
                                                 mr: 1,
-                                                boxShadow: '0 2px 8px rgba(79,172,254,0.3)'
-                                            }}>
-                                                <AccessTimeIcon sx={{ fontSize: isMobile ? 18 : 20, color: 'white' }} />
-                                            </Box>
-                                            <Typography variant={isMobile ? "h6" : "h5"} sx={{
+                                                boxShadow: '0 2px 8px rgba(79,172,254,0.3)',
+                                            }}
+                                        >
+                                            <AccessTimeIcon sx={{ fontSize: isMobile ? 18 : 20, color: 'white' }} />
+                                        </Box>
+                                        <Typography
+                                            variant={isMobile ? 'h6' : 'h5'}
+                                            sx={{
                                                 fontWeight: 'bold',
                                                 background: 'linear-gradient(45deg, #4facfe 0%, #00f2fe 100%)',
                                                 WebkitBackgroundClip: 'text',
-                                                WebkitTextFillColor: 'transparent'
-                                            }}>
-                                                📊 Today's Entries
-                                            </Typography>
+                                                WebkitTextFillColor: 'transparent',
+                                            }}
+                                        >
+                                            {isCustomDate ? `${selectedDate} Entries` : "Today's Entries"}
+                                        </Typography>
 
-                                            {/* Add the badge here */}
-                                            {userPermissions.all_status_access && (
+                                        {userPermissions.all_status_access && (
+                                            <>
                                                 <Chip
                                                     label="Viewing All Statuses"
                                                     color="success"
@@ -953,156 +1014,216 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                     variant="outlined"
                                                     sx={{ ml: 1, fontWeight: 'bold' }}
                                                 />
-                                            )}
-                                        </Box>
+
+                                                {/* Date Picker */}
+                                                <DatePicker
+                                                    selected={new Date(selectedDate)}
+                                                    onChange={(date) => {
+                                                        if (date) {
+                                                            const formatted = date.toISOString().split('T')[0];
+                                                            handleDateSelect(formatted);
+                                                        }
+                                                    }}
+                                                    maxDate={new Date()}
+                                                    dateFormat="yyyy-MM-dd"
+                                                    customInput={
+                                                        <IconButton sx={{ ml: 1 }} size="small">
+                                                            <TodayIcon />
+                                                        </IconButton>
+                                                    }
+                                                    popperPlacement="bottom-start"
+                                                    popperModifiers={[
+                                                        {
+                                                            name: 'offset',
+                                                            options: { offset: [0, 5] },
+                                                        },
+                                                        {
+                                                            name: 'zIndex',
+                                                            enabled: true,
+                                                            phase: 'write',
+                                                            fn({ state }) {
+                                                                state.styles.popper.zIndex = 9999;
+                                                            },
+                                                        },
+                                                        {
+                                                            name: 'preventOverflow',
+                                                            options: {
+                                                                boundary: 'viewport',
+                                                            },
+                                                        },
+                                                    ]}
+                                                />
+
+                                                {isCustomDate && (
+                                                    <Button onClick={handleTodayClick} size="small" sx={{ ml: 1 }}>
+                                                        Today
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )}
+
                                         <Chip
-                                            icon={<AccessTimeIcon />}
-                                            label={`${calculateTotalHours()}h ${userPermissions.all_status_access ? '(All)' : '(My)'}`}
-                                            color="primary"
-                                            variant="filled"
-                                            size={isMobile ? "small" : "medium"}
-                                            sx={{ fontWeight: 'bold' }}
+                                            label={`${calculateTotalHours()}h (${userPermissions.all_status_access ? 'All' : 'Mine'})`}
+                                            color="info"
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{
+                                                ml: 1,
+                                                fontWeight: 'bold',
+                                                bgcolor: 'rgba(79,172,254,0.1)',
+                                                borderColor: 'info.light',
+                                            }}
                                         />
                                     </Box>
 
                                     <Divider sx={{ mb: 2 }} />
 
-                                    {todayStatus.length === 0 ? (
-                                        <Box sx={{
-                                            textAlign: 'center',
-                                            py: 4,
-                                            bgcolor: 'grey.50',
-                                            borderRadius: 2,
-                                            flex: 1,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            justifyContent: 'center',
-                                            alignItems: 'center'
-                                        }}>
-                                            <Typography variant="body1" color="text.secondary" gutterBottom>
-                                                No entries for today
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Add your first status entry!
-                                            </Typography>
-                                        </Box>
-                                    ) : (
-                                        <TableContainer
-                                            sx={{
+                                    {/* Content Area - Simplified height management */}
+                                    <Box sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        minHeight: isMobile ? '400px' : '400px'
+                                    }}>
+                                        {todayStatus.length === 0 ? (
+                                            <Box sx={{
+                                                textAlign: 'center',
+                                                py: 4,
+                                                bgcolor: 'grey.50',
                                                 borderRadius: 2,
                                                 flex: 1,
-                                                overflow: 'auto',
-                                                maxHeight: '60vh', // This controls the scrollable area height
-                                                minHeight: '200px' // Ensure minimum height
-                                            }}
-                                        >
-                                            <Table size={isMobile ? "small" : "medium"} stickyHeader>
-                                                <TableHead>
-                                                    <TableRow sx={{ bgcolor: 'primary.main' }}>
-                                                        {/* Add Employee column when user has all_status_access */}
-                                                        {userPermissions.all_status_access && (
-                                                            <TableCell sx={{ color: 'white', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '0.9rem', py: 1 }}>
-                                                                Employee
-                                                            </TableCell>
-                                                        )}
-                                                        <TableCell sx={{ color: 'white', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '0.9rem', py: 1 }}>
-                                                            Usecase
-                                                        </TableCell>
-                                                        {!isSmallMobile && (
-                                                            <TableCell sx={{ color: 'white', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '0.9rem', py: 1 }}>
-                                                                Time
-                                                            </TableCell>
-                                                        )}
-                                                        <TableCell sx={{ color: 'white', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '0.9rem', py: 1 }}>
-                                                            Actions
-                                                        </TableCell>
-                                                    </TableRow>
-                                                </TableHead>
-                                                <TableBody>
-                                                    {todayStatus.map((status) => (
-                                                        <TableRow key={status.id} hover>
-                                                            {/* Show employee info when user has all_status_access */}
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                minHeight: isMobile ? '350px' : '450px'
+                                            }}>
+                                                <Typography variant="body1" color="text.secondary" gutterBottom>
+                                                    No entries for today
+                                                </Typography>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Add your first status entry!
+                                                </Typography>
+                                            </Box>
+                                        ) : (
+                                            <TableContainer
+                                                sx={{
+                                                    borderRadius: 2,
+                                                    flex: 1,
+                                                    overflowY: 'auto',
+                                                    overflowX: 'hidden',
+                                                    maxHeight: isMobile ? '400px' : '500px',
+                                                    minHeight: isMobile ? '400px' : '400px',
+                                                    position: 'relative',
+                                                    zIndex: 1,
+                                                }}
+                                            >
+                                                <Table size={isMobile ? "small" : "medium"} stickyHeader>
+                                                    <TableHead>
+                                                        <TableRow sx={{ bgcolor: 'primary.main' }}>
+                                                            {/* Add Employee column when user has all_status_access */}
                                                             {userPermissions.all_status_access && (
-                                                                <TableCell>
-                                                                    <Typography variant={isMobile ? "body2" : "body1"} fontWeight="bold" noWrap>
-                                                                        {status.employeeName}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" color="text.secondary" noWrap>
-                                                                        {status.employeeId}
-                                                                    </Typography>
+                                                                <TableCell sx={{ color: 'black', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '1.1rem', py: 1 }}>
+                                                                    Employee
                                                                 </TableCell>
                                                             )}
-                                                            <TableCell>
-                                                                <Typography variant={isMobile ? "body2" : "body1"} fontWeight="bold" noWrap>
-                                                                    {status.usecaseName}
-                                                                </Typography>
-                                                                <Typography variant="caption" color="text.secondary" noWrap>
-                                                                    {status.description?.substring(0, isMobile ? 25 : 40)}...
-                                                                </Typography>
-                                                                {isSmallMobile && (
-                                                                    <Typography variant="caption" color="primary" display="block">
-                                                                        {status.workingHours || 0}h {(status.workingMinutes || 0)}m
-                                                                    </Typography>
-                                                                )}
+                                                            <TableCell sx={{ color: 'black', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '1.1rem', py: 1 }}>
+                                                                Usecase
                                                             </TableCell>
                                                             {!isSmallMobile && (
-                                                                <TableCell>
-                                                                    <Typography variant={isMobile ? "body2" : "body1"} fontWeight="bold" color="primary">
-                                                                        {status.workingHours || 0}h {(status.workingMinutes || 0)}m
-                                                                    </Typography>
+                                                                <TableCell sx={{ color: 'black', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '1.1rem', py: 1 }}>
+                                                                    Time
                                                                 </TableCell>
                                                             )}
-                                                            <TableCell>
-                                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                                    {/* Only show edit/delete for own records OR if user has all access */}
-                                                                    {(userPermissions.all_status_access || status.employeeId === user?.emp_id) && (
-                                                                        <>
-                                                                            <IconButton
-                                                                                size="small"
-                                                                                onClick={() => handleEdit(status)}
-                                                                                sx={{
-                                                                                    bgcolor: 'primary.light',
-                                                                                    '&:hover': { bgcolor: 'primary.main' },
-                                                                                }}
-                                                                            >
-                                                                                <EditIcon sx={{ color: 'white', fontSize: isMobile ? 16 : 18 }} />
-                                                                            </IconButton>
-                                                                            <IconButton
-                                                                                size="small"
-                                                                                onClick={() => handleDeleteClick(status)}
-                                                                                sx={{
-                                                                                    bgcolor: 'error.light',
-                                                                                    '&:hover': { bgcolor: 'error.main' },
-                                                                                }}
-                                                                            >
-                                                                                <DeleteIcon sx={{ color: 'white', fontSize: isMobile ? 16 : 18 }} />
-                                                                            </IconButton>
-                                                                        </>
-                                                                    )}
-                                                                    {!userPermissions.all_status_access && status.employeeId !== user?.emp_id && (
-                                                                        <Typography variant="caption" color="text.secondary">
-                                                                            Read only
-                                                                        </Typography>
-                                                                    )}
-                                                                </Box>
+                                                            <TableCell sx={{ color: 'black', fontWeight: 'bold', fontSize: isMobile ? '0.8rem' : '1.1rem', py: 1 }}>
+                                                                Actions
                                                             </TableCell>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </TableContainer>
-                                    )}
+                                                    </TableHead>
+                                                    <TableBody>
+                                                        {todayStatus.map((status) => (
+                                                            <TableRow key={status.id} hover>
+                                                                {/* Show employee info when user has all_status_access */}
+                                                                {userPermissions.all_status_access && (
+                                                                    <TableCell>
+                                                                        <Typography variant={isMobile ? "body2" : "body1"} fontWeight="bold" noWrap>
+                                                                            {status.employeeName}
+                                                                        </Typography>
+                                                                        <Typography variant="caption" color="text.secondary" noWrap>
+                                                                            {status.employeeId}
+                                                                        </Typography>
+                                                                    </TableCell>
+                                                                )}
+                                                                <TableCell>
+                                                                    <Typography variant={isMobile ? "body2" : "body1"} fontWeight="bold" noWrap>
+                                                                        {status.usecaseName}
+                                                                    </Typography>
+                                                                    <Typography variant="caption" color="text.secondary" noWrap>
+                                                                        {status.description?.substring(0, isMobile ? 25 : 40)}...
+                                                                    </Typography>
+                                                                    {isSmallMobile && (
+                                                                        <Typography variant="caption" color="primary" display="block">
+                                                                            {status.workingHours || 0}h {(status.workingMinutes || 0)}m
+                                                                        </Typography>
+                                                                    )}
+                                                                </TableCell>
+                                                                {!isSmallMobile && (
+                                                                    <TableCell>
+                                                                        <Typography variant={isMobile ? "body2" : "body1"} fontWeight="bold" color="primary">
+                                                                            {status.workingHours || 0}h {(status.workingMinutes || 0)}m
+                                                                        </Typography>
+                                                                    </TableCell>
+                                                                )}
+                                                                <TableCell>
+                                                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                                        {/* Only show edit/delete for own records OR if user has all access */}
+                                                                        {(userPermissions.all_status_access || status.employeeId === user?.emp_id) && (
+                                                                            <>
+                                                                                <IconButton
+                                                                                    size="small"
+                                                                                    onClick={() => handleEdit(status)}
+                                                                                    sx={{
+                                                                                        bgcolor: 'primary.light',
+                                                                                        '&:hover': { bgcolor: 'primary.main' },
+                                                                                    }}
+                                                                                >
+                                                                                    <EditIcon sx={{ color: 'white', fontSize: isMobile ? 16 : 18 }} />
+                                                                                </IconButton>
+                                                                                <IconButton
+                                                                                    size="small"
+                                                                                    onClick={() => handleDeleteClick(status)}
+                                                                                    sx={{
+                                                                                        bgcolor: 'error.light',
+                                                                                        '&:hover': { bgcolor: 'error.main' },
+                                                                                    }}
+                                                                                >
+                                                                                    <DeleteIcon sx={{ color: 'white', fontSize: isMobile ? 16 : 18 }} />
+                                                                                </IconButton>
+                                                                            </>
+                                                                        )}
+                                                                        {!userPermissions.all_status_access && status.employeeId !== user?.emp_id && (
+                                                                            <Typography variant="caption" color="text.secondary">
+                                                                                Read only
+                                                                            </Typography>
+                                                                        )}
+                                                                    </Box>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </TableContainer>
+                                        )}
+                                    </Box>
                                 </Box>
                             </Paper>
                         </Slide>
                     </Box>
-
                 </Box>
 
-            </Container>
+            </Container >
 
             {/* Delete Confirmation Dialog */}
-            <Dialog
+            < Dialog
                 open={deleteDialogOpen}
                 onClose={handleDeleteCancel}
                 maxWidth="xs"
@@ -1134,8 +1255,11 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                         Delete
                     </Button>
                 </DialogActions>
-            </Dialog>
-        </Box>
+            </Dialog >
+
+
+
+        </Box >
     );
 };
 

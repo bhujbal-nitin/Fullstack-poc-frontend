@@ -106,10 +106,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: nowrap; /* Prevent wrapping on large screens */
+  flex-wrap: nowrap;
+  /* Prevent wrapping on large screens */
   justify-content: flex-end;
   min-width: 0;
-  margin-left: auto; /* Push to the right */
+  margin-left: auto;
+  /* Push to the right */
   flex-shrink: 0;
 }
 
@@ -120,7 +122,8 @@
   flex-shrink: 1;
 }
 
-.nav-btn, .logout-btn {
+.nav-btn,
+.logout-btn {
   padding: 0.4rem 0.8rem;
   border: none;
   border-radius: 4px;
@@ -255,15 +258,15 @@
   .page-header {
     gap: 1.5rem;
   }
-  
+
   .page-title {
     font-size: 1.4rem;
   }
-  
+
   .user-info span {
     font-size: 0.85rem;
   }
-  
+
   .user-info {
     gap: 10px;
   }
@@ -274,12 +277,13 @@
   .page-header {
     gap: 1rem;
   }
-  
+
   .user-info {
-    flex-wrap: wrap; /* Allow wrapping on medium screens */
+    flex-wrap: wrap;
+    /* Allow wrapping on medium screens */
     justify-content: flex-end;
   }
-  
+
   .user-info span {
     font-size: 0.85rem;
   }
@@ -290,41 +294,43 @@
   .header-bar {
     padding: 0.4rem 0.8rem;
   }
-  
+
   .page-header {
     flex-direction: column;
     gap: 0.8rem;
     text-align: center;
   }
-  
+
   .logo-title-container {
     flex-direction: column;
     gap: 0.4rem;
     width: 100%;
   }
-  
+
   .page-title {
     font-size: 1.2rem;
     white-space: normal;
     text-align: center;
   }
-  
+
   .user-info {
     flex-direction: column;
     gap: 0.6rem;
     width: 100%;
     justify-content: center;
-    margin-left: 0; /* Reset margin for mobile */
+    margin-left: 0;
+    /* Reset margin for mobile */
   }
-  
+
   .user-info span {
     order: -1;
     white-space: normal;
     text-align: center;
     font-size: 0.85rem;
   }
-  
-  .nav-btn, .logout-btn {
+
+  .nav-btn,
+  .logout-btn {
     width: 140px;
     margin: 0 auto;
   }
@@ -334,25 +340,27 @@
   .header-bar {
     padding: 0.3rem 0.6rem;
   }
-  
+
   .page-title {
     font-size: 1.1rem;
   }
-  
+
   .logo-img {
     height: 30px;
   }
-  
+
   .user-info span {
     font-size: 0.8rem;
   }
-  
-  .nav-btn, .logout-btn {
+
+  .nav-btn,
+  .logout-btn {
     padding: 0.3rem 0.6rem;
     font-size: 0.8rem;
     width: 130px;
   }
 }
+
 /* ===== UTILITY CLASSES ===== */
 .text-center {
   text-align: center;
@@ -382,3 +390,13 @@
 
 
 
+.react-datepicker-popper {
+  z-index: 99999 !important;
+  /* ✅ ensures it always appears above tables/cards/dialogs */
+}
+
+.react-datepicker {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+}

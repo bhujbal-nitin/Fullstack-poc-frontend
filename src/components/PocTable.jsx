@@ -125,7 +125,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         salesPerson: '',
         region: '',
         isBillable: '',
-        status: '',
+        status: [],
         startDate: '',
         endDate: '',
         pocType: '',
@@ -437,15 +437,19 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         setPage(0); // Reset to first page when filtering
     };
 
-    // Clear specific column filter
+    // Clear specific column filter - update to handle arrays
     const handleClearColumnFilter = (column) => {
-        handleColumnFilterChange(column, '');
+        if (column === 'status') {
+            handleColumnFilterChange(column, []);
+        } else {
+            handleColumnFilterChange(column, '');
+        }
     };
 
-    // Clear all filters
+    // Clear all filters - update for status array
     const handleClearAllFilters = () => {
         const clearedFilters = Object.keys(columnFilters).reduce((acc, key) => {
-            acc[key] = '';
+            acc[key] = key === 'status' ? [] : '';
             return acc;
         }, {});
         setColumnFilters(clearedFilters);
@@ -484,12 +488,17 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
 
         // Column filters
         const matchesColumnFilters = Object.entries(columnFilters).every(([column, filterValue]) => {
-            if (!filterValue) return true;
+            if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0)) return true;
 
             const pocValue = poc[column];
             if (pocValue === null || pocValue === undefined) return false;
 
-            // Handle boolean values (isBillable)
+            // Handle status with multiple selection
+            if (column === 'status' && Array.isArray(filterValue)) {
+                return filterValue.length === 0 || filterValue.includes(pocValue);
+            }
+
+            // Handle boolean values (isBillable) - keep existing
             if (column === 'isBillable') {
                 if (filterValue === 'true') return pocValue === true;
                 if (filterValue === 'false') return pocValue === false;
@@ -533,9 +542,12 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         return values;
     };
 
-    // Check if any filters are active
+    // Check if any filters are active - update for array filters
     const hasActiveFilters = () => {
-        return searchTerm || Object.values(columnFilters).some(value => value !== '');
+        return searchTerm || Object.values(columnFilters).some(value =>
+            (Array.isArray(value) && value.length > 0) ||
+            (!Array.isArray(value) && value !== '')
+        );
     };
 
     const handleViewDetails = (poc) => {
@@ -603,23 +615,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     });
 
 
-
-    // const getStatusColor = (status) => {
-    //     switch (status?.toLowerCase()) {
-    //         case 'completed': return 'success';
-    //         case 'in progress': return 'warning';
-    //         case 'pending': return 'secondary';
-    //         case 'dropped': return 'error';
-    //         case 'draft': return 'default';
-    //         case 'awaiting': return 'info';
-    //         case 'hold': return 'yellow'; // Changed from 'secondary' to 'warning'
-    //         case 'closed': return 'error';
-    //         case 'converted': return 'success';
-    //         default: return 'default';
-    //     }
-    // };
-
-
     const getStatusColor = (status) => {
         switch (status?.toLowerCase()) {
             case 'completed': return { muiColor: 'success' };
@@ -631,6 +626,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             case 'hold': return { customColor: 'yellow', textColor: 'black' };
             case 'closed': return { customColor: 'cyan', textColor: 'black' };
             case 'converted': return { customColor: 'lawngreen', textColor: 'black' };
+            case 'live': return { customColor: 'Lime', textColor: 'black' };
             default: return { muiColor: 'default' };
         }
     };
@@ -705,7 +701,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     const [statusMenuAnchor, setStatusMenuAnchor] = React.useState(null);
 
     // Status options
-    const statusOptions = ['Draft', 'Pending', 'In Progress', 'Completed', 'Dropped', 'Awaiting', 'Hold', 'Closed', 'Converted'];
+    const statusOptions = ['Draft', 'Pending', 'In Progress', 'Completed', 'Converted', 'Dropped', 'Awaiting', 'Hold', 'Closed', 'Live'];
 
 
     // Function to handle status change
@@ -890,10 +886,45 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         spocDesignation: { label: 'SPOC Designation', truncate: false },
         tags: { label: 'Tags', truncate: 15 },
         createdBy: { label: 'Created By', truncate: false },
-        estimatedEfforts: { label: 'Estimated Efforts', truncate: false },
+
+        estimatedEfforts: {
+            label: 'Estimated Efforts',
+            truncate: false,
+            render: (poc) => (
+                <Typography variant="body2">
+                    {poc.estimatedEfforts !== null && poc.estimatedEfforts !== undefined
+                        ? `${Math.round(parseFloat(poc.estimatedEfforts))} days`
+                        : '-'
+                    }
+                </Typography>
+            )
+        },
         approvedBy: { label: 'Approved By', truncate: false },
-        totalEfforts: { label: 'Total Efforts', truncate: false },
-        varianceDays: { label: 'Variance Days', truncate: false },
+
+        totalEfforts: {
+            label: 'Total Efforts',
+            truncate: false,
+            render: (poc) => (
+                <Typography variant="body2">
+                    {poc.totalEfforts !== null && poc.totalEfforts !== undefined
+                        ? `${Math.round(parseFloat(poc.totalEfforts))} days`
+                        : '-'
+                    }
+                </Typography>
+            )
+        },
+        varianceDays: {
+            label: 'Variance Days',
+            truncate: false,
+            render: (poc) => (
+                <Typography variant="body2">
+                    {poc.varianceDays !== null && poc.varianceDays !== undefined
+                        ? `${Math.round(parseFloat(poc.varianceDays))} days`
+                        : '-'
+                    }
+                </Typography>
+            )
+        },
 
     };
 
@@ -1073,9 +1104,10 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                     <Table stickyHeader aria-label="poc table" size="small" sx={{ minWidth: 1000 }}>
                                         <TableHead>
                                             <TableRow>
-                                                {/* Add selection column */}
+                                                {/* Selection column */}
                                                 <TableCell padding="checkbox" sx={{
-                                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                    backgroundColor: '#1976d2',
+                                                    color: 'white',
                                                     fontWeight: 'bold'
                                                 }}>
                                                     <Checkbox
@@ -1083,7 +1115,13 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                         checked={paginatedData.length > 0 && paginatedData.every(poc => rowSelection[poc.pocId])}
                                                         indeterminate={paginatedData.some(poc => rowSelection[poc.pocId]) && !paginatedData.every(poc => rowSelection[poc.pocId])}
                                                         onChange={handleSelectAllOnPage}
-                                                        sx={{ cursor: 'pointer' }}
+                                                        sx={{
+                                                            cursor: 'pointer',
+                                                            color: 'white', // Make checkbox white
+                                                            '&.Mui-checked': {
+                                                                color: 'white',
+                                                            }
+                                                        }}
                                                     />
                                                 </TableCell>
 
@@ -1091,7 +1129,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                     visibleColumns[key] && (
                                                         <TableCell key={key} sx={{
                                                             whiteSpace: 'nowrap',
-                                                            bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                            backgroundColor: '#1976d2',
+                                                            color: 'white',
                                                             fontWeight: 'bold'
                                                         }}>
                                                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -1099,27 +1138,67 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                                 <IconButton
                                                                     size="small"
                                                                     onClick={(e) => handleOpenFilterPopover(e, key)}
-                                                                    color={columnFilters[key] ? 'primary' : 'default'}
-                                                                    sx={{ ml: 0.5 }}
+                                                                    color={columnFilters[key] &&
+                                                                        (Array.isArray(columnFilters[key]) ?
+                                                                            columnFilters[key].length > 0 :
+                                                                            columnFilters[key] !== '') ? 'primary' : 'default'}
+                                                                    sx={{
+                                                                        ml: 0.5,
+                                                                        color: 'white',
+                                                                        '&:hover': {
+                                                                            backgroundColor: 'rgba(255,255,255,0.1)'
+                                                                        }
+                                                                    }}
                                                                 >
                                                                     <FilterListIcon fontSize="small" />
                                                                 </IconButton>
                                                             </Box>
-                                                            {columnFilters[key] && (
-                                                                <Box sx={{ mt: 0.5 }}>
-                                                                    <Chip
-                                                                        label={columnFilters[key]}
-                                                                        size="small"
-                                                                        onDelete={() => handleClearColumnFilter(key)}
-                                                                    />
-                                                                </Box>
-                                                            )}
+
+                                                            {/* Show filter chip only when filter is applied */}
+                                                            {columnFilters[key] &&
+                                                                (Array.isArray(columnFilters[key]) ?
+                                                                    columnFilters[key].length > 0 :
+                                                                    columnFilters[key] !== '') && (
+                                                                    <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                                        {Array.isArray(columnFilters[key]) ? (
+                                                                            // For status (array), show individual chips for each selected status
+                                                                            columnFilters[key].map((statusValue) => (
+                                                                                <Chip
+                                                                                    key={statusValue}
+                                                                                    label={statusValue}
+                                                                                    size="small"
+                                                                                    onDelete={() => {
+                                                                                        // Remove this specific status from the filter
+                                                                                        const updatedStatus = columnFilters[key].filter(s => s !== statusValue);
+                                                                                        handleColumnFilterChange(key, updatedStatus);
+                                                                                    }}
+                                                                                    sx={{
+                                                                                        backgroundColor: 'white',
+                                                                                        color: '#1976d2'
+                                                                                    }}
+                                                                                />
+                                                                            ))
+                                                                        ) : (
+                                                                            // For other filters (string), show single chip
+                                                                            <Chip
+                                                                                label={columnFilters[key]}
+                                                                                size="small"
+                                                                                onDelete={() => handleClearColumnFilter(key)}
+                                                                                sx={{
+                                                                                    backgroundColor: 'white',
+                                                                                    color: '#1976d2'
+                                                                                }}
+                                                                            />
+                                                                        )}
+                                                                    </Box>
+                                                                )}
                                                         </TableCell>
                                                     )
                                                 )}
                                                 <TableCell sx={{
                                                     whiteSpace: 'nowrap',
-                                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                    backgroundColor: '#1976d2',
+                                                    color: 'white',
                                                     fontWeight: 'bold'
                                                 }}>
                                                     Actions
@@ -1311,6 +1390,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             </Menu>
 
             {/* Filter Popover */}
+            {/* Filter Popover */}
             <Popover
                 open={Boolean(filterAnchorEl)}
                 anchorEl={filterAnchorEl}
@@ -1329,7 +1409,27 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                         Filter {columnConfig[currentFilterColumn]?.label}
                     </Typography>
 
-                    {currentFilterColumn === 'isBillable' ? (
+                    {currentFilterColumn === 'status' ? (
+                        <FormControl fullWidth size="small">
+                            <InputLabel>Status</InputLabel>
+                            <Select
+                                multiple
+                                value={columnFilters.status}
+                                onChange={(e) => handleColumnFilterChange('status', e.target.value)}
+                                input={<OutlinedInput label="Status" />}
+                                renderValue={(selected) => selected.length === 0 ? 'All Statuses' : selected.join(', ')}
+                            >
+                                {getUniqueValues('status')
+                                    .filter(value => value && value.trim() !== '') // ⬅️ remove empty status
+                                    .map(value => (
+                                        <MenuItem key={value} value={value}>
+                                            <Checkbox checked={columnFilters.status.indexOf(value) > -1} />
+                                            <ListItemText primary={value} />
+                                        </MenuItem>
+                                    ))}
+                            </Select>
+                        </FormControl>
+                    ) : currentFilterColumn === 'isBillable' ? (
                         <FormControl fullWidth size="small">
                             <InputLabel>Billable Status</InputLabel>
                             <Select
@@ -1337,23 +1437,11 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                 onChange={(e) => handleColumnFilterChange('isBillable', e.target.value)}
                                 input={<OutlinedInput label="Billable Status" />}
                             >
-                                <MenuItem value="">All</MenuItem>
+                                <MenuItem value="">
+                                    <em>All</em>
+                                </MenuItem>
                                 <MenuItem value="true">Billable</MenuItem>
                                 <MenuItem value="false">Non-Billable</MenuItem>
-                            </Select>
-                        </FormControl>
-                    ) : currentFilterColumn === 'status' ? (
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Status</InputLabel>
-                            <Select
-                                value={columnFilters.status}
-                                onChange={(e) => handleColumnFilterChange('status', e.target.value)}
-                                input={<OutlinedInput label="Status" />}
-                            >
-                                <MenuItem value="">All</MenuItem>
-                                {getUniqueValues('status').map(value => (
-                                    <MenuItem key={value} value={value}>{value}</MenuItem>
-                                ))}
                             </Select>
                         </FormControl>
                     ) : (
@@ -1371,7 +1459,11 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                         <Button
                             size="small"
                             onClick={() => handleClearColumnFilter(currentFilterColumn)}
-                            disabled={!columnFilters[currentFilterColumn]}
+                            disabled={
+                                currentFilterColumn === 'status' ?
+                                    columnFilters.status.length === 0 :
+                                    !columnFilters[currentFilterColumn]
+                            }
                         >
                             Clear
                         </Button>
@@ -1414,7 +1506,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 )}
             </Menu>
 
-            {/* Modal for PocPrjId */}
+
             {/* Modal for PocPrjId */}
             <Dialog
                 open={open}
@@ -1496,11 +1588,36 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="End Date" value={formatDate(selectedPoc.endDate)} />
                             <DetailItem label="Actual Start Date" value={formatDate(selectedPoc.actualStartDate)} />
                             <DetailItem label="Actual End Date" value={formatDate(selectedPoc.actualEndDate)} />
-                            <DetailItem label="Estimated Efforts" value={formatNumber(selectedPoc.estimatedEfforts)} />
+
+                            <DetailItem
+                                label="Estimated Efforts"
+                                value={
+                                    selectedPoc.estimatedEfforts !== null && selectedPoc.estimatedEfforts !== undefined
+                                        ? `${Math.round(parseFloat(selectedPoc.estimatedEfforts))} days`
+                                        : '-'
+                                }
+                            />
                             <DetailItem label="Approved By" value={selectedPoc.approvedBy || '-'} />
-                            <DetailItem label="Total Efforts" value={formatNumber(selectedPoc.totalEfforts)} />
-                            <DetailItem label="Variance Days" value={formatNumber(selectedPoc.varianceDays)} />
-                            <DetailItem label="Worked Hours" value={formatNumber(selectedPoc.totalWorkedHours)} />
+                            <DetailItem
+                                label="Total Efforts"
+                                value={
+                                    selectedPoc.totalEfforts
+                                        ? `${Math.round(parseFloat(selectedPoc.totalEfforts))} days`
+                                        : '-'
+                                }
+                            />
+                            <DetailItem
+                                label="Variance Days"
+                                value={
+                                    selectedPoc.varianceDays !== null && selectedPoc.varianceDays !== undefined
+                                        ? `${Math.round(parseFloat(selectedPoc.varianceDays))} days`
+                                        : '-'
+                                }
+                            />
+                            <DetailItem
+                                label="Worked Hours"
+                                value={selectedPoc.totalWorkedHours ? parseFloat(selectedPoc.totalWorkedHours).toFixed(2) : '-'}
+                            />
                             <DetailItem label="Remark" value={selectedPoc.remark || '-'} />
                             <Box sx={{ gridColumn: '1 / -1' }}>
                                 <DetailItem

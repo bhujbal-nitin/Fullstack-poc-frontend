@@ -466,6 +466,18 @@ const InitiateUsecaseEdit = ({
                     onLogout?.();
                     throw new Error("Session expired. Please login again.");
                 }
+
+                // Handle status validation error (403)
+                if (res.status === 403) {
+                    const errorData = await res.json();
+                    showSnackbar?.(errorData.message || 'Record status changed. Cannot update.', 'error');
+
+                    // Auto-redirect to table after showing error message
+                    setTimeout(() => navigate('/poc-records'), 3000);
+                    setLoading(false);
+                    return null; // Stop further processing
+                }
+
                 if (!res.ok) {
                     const errorText = await res.text();
                     throw new Error(errorText || "Unknown error");
@@ -473,10 +485,13 @@ const InitiateUsecaseEdit = ({
                 return res.json();
             })
             .then((data) => {
+                // If we returned early due to 403 error, data will be null
+                if (data === null) return;
+
                 console.log("Update response:", data); // Debug log
 
                 // Check for success in multiple ways to be safe
-                if (data && (data.success === true || data.message?.includes("success") || res.status === 200)) {
+                if (data && (data.success === true || data.message?.includes("success") || data.id)) {
                     showSnackbar?.('POC updated successfully!', 'success');
 
                     // Navigate back to records after successful update
@@ -487,6 +502,9 @@ const InitiateUsecaseEdit = ({
             })
             .catch((err) => {
                 console.error("Error updating POC:", err);
+
+                // Skip error handling if we already handled the 403 case
+                if (err.message.includes("403")) return;
 
                 // Better error message extraction
                 let errorMessage = "Update failed";

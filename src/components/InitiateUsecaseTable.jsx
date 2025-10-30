@@ -54,6 +54,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState("");
+    const [hasSalesAdminAccess, setHasSalesAdminAccess] = useState(false); // Add this state
+
+
 
     // Column visibility state
     const [visibleColumns, setVisibleColumns] = useState({
@@ -90,6 +93,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
     const [pocToDelete, setPocToDelete] = useState(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+
+
+
     // Usecase types for dropdown
     const usecaseTypes = [
         'POC',
@@ -112,7 +118,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
 
 
-    
+
     // Update fetchPocData to check permissions first
     const fetchPocData = useCallback(async () => {
         try {
@@ -137,10 +143,11 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                 }
             });
 
-            const hasSalesAdminAccess = permissionsResponse.data.sales_admin;
+            const hasAdminAccess = permissionsResponse.data.sales_admin;
+            setHasSalesAdminAccess(hasAdminAccess); // Set the state
 
             let response;
-            if (hasSalesAdminAccess) {
+            if (hasAdminAccess) {
                 // If user has sales_admin permission, fetch all records
                 console.log('User has sales_admin access, fetching all records');
                 response = await axios.get('http://localhost:5050/poc/getAllPocs', {
@@ -186,10 +193,49 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
         }
     }, [handleLogout, navigate, currentUser]);
 
+    // Handle status change for admin users
+    const handleStatusChange = async (pocId, newStatus) => {
+        try {
+            const token = localStorage.getItem('authToken');
+
+            // Update status in the database
+            await axios.put(`http://localhost:5050/poc/updateInitiatedStatus/${pocId}`,
+                { status: newStatus },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            // Update local state
+            setPocData(prevData =>
+                prevData.map(poc =>
+                    poc.id === pocId ? { ...poc, status: newStatus } : poc
+                )
+            );
+
+            showSnackbar(`Status updated to "${newStatus}" successfully`, 'success');
+
+            // If status changed from Draft to non-Draft, show warning for other users
+            const previousPoc = pocData.find(poc => poc.id === pocId);
+            if (previousPoc?.status === 'Draft' && newStatus !== 'Draft') {
+                // You could emit a socket event here or trigger a refresh
+                console.log(`Record ${pocId} status changed from Draft to ${newStatus}`);
+            }
+
+        } catch (error) {
+            console.error('Error updating status:', error);
+            showSnackbar('Failed to update status', 'error');
+        }
+    };
+
 
     useEffect(() => {
         fetchPocData();
     }, [fetchPocData]);
+
 
     // Column configuration
     const columnConfig = {
@@ -219,9 +265,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             label: 'Use Case',
             truncate: 25,
             render: (poc) => (
-                <Tooltip title={poc.usecase || 'N/A'}>
+                <Tooltip title={poc.usecase || '-'}>
                     <span>
-                        {poc.usecase ? (poc.usecase.length > 25 ? poc.usecase.substring(0, 25) + '...' : poc.usecase) : 'N/A'}
+                        {poc.usecase ? (poc.usecase.length > 25 ? poc.usecase.substring(0, 25) + '...' : poc.usecase) : '-'}
                     </span>
                 </Tooltip>
             )
@@ -230,9 +276,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             label: 'Brief',
             truncate: 30,
             render: (poc) => (
-                <Tooltip title={poc.brief || 'N/A'}>
+                <Tooltip title={poc.brief || '-'}>
                     <span>
-                        {poc.brief ? (poc.brief.length > 30 ? poc.brief.substring(0, 30) + '...' : poc.brief) : 'N/A'}
+                        {poc.brief ? (poc.brief.length > 30 ? poc.brief.substring(0, 30) + '...' : poc.brief) : '-'}
                     </span>
                 </Tooltip>
             )
@@ -242,7 +288,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             truncate: false,
             render: (poc) => (
                 <Chip
-                    label={poc.processType || 'N/A'}
+                    label={poc.processType || '-'}
                     size="small"
                     color="secondary"
                     variant="outlined"
@@ -255,7 +301,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             truncate: false,
             render: (poc) => (
                 <Chip
-                    label={poc.region || 'N/A'}
+                    label={poc.region || '-'}
                     size="small"
                     color="primary"
                     variant="outlined"
@@ -276,9 +322,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             label: 'Remark',
             truncate: 20,
             render: (poc) => (
-                <Tooltip title={poc.remark || 'N/A'}>
+                <Tooltip title={poc.remark || '-'}>
                     <span>
-                        {poc.remark ? (poc.remark.length > 20 ? poc.remark.substring(0, 20) + '...' : poc.remark) : 'N/A'}
+                        {poc.remark ? (poc.remark.length > 20 ? poc.remark.substring(0, 20) + '...' : poc.remark) : '-'}
                     </span>
                 </Tooltip>
             )
@@ -286,18 +332,48 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
         status: {
             label: 'Status',
             truncate: false,
-            render: (poc) => (
-                <Chip
-                    label={poc.status || 'N/A'}
-                    size="small"
-                    color={
-                        poc.status === 'Completed' ? 'success' :
-                            poc.status === 'In Progress' ? 'warning' :
-                                poc.status === 'Pending' ? 'error' : 'default'
-                    }
-                    variant="filled"
-                />
-            )
+            render: (poc) => {
+                // If user has sales_admin access, show dropdown
+                if (hasSalesAdminAccess) {
+                    return (
+                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                                value={poc.status || ''}
+                                onChange={(e) => handleStatusChange(poc.id, e.target.value)}
+                                displayEmpty
+                                sx={{
+                                    fontSize: '0.875rem',
+                                    '& .MuiSelect-select': {
+                                        py: 0.5
+                                    }
+                                }}
+                            >
+                                <MenuItem value="Draft">Draft</MenuItem>
+                                <MenuItem value="Initiated">Initiated</MenuItem>
+                                {/* <MenuItem value="Pending">Pending</MenuItem>
+                                <MenuItem value="In Progress">In Progress</MenuItem>
+                                <MenuItem value="Completed">Completed</MenuItem> */}
+                            </Select>
+                        </FormControl>
+                    );
+                }
+
+                // For non-admin users, show normal chip
+                return (
+                    <Chip
+                        label={poc.status || '-'}
+                        size="small"
+                        color={
+                            poc.status === 'Completed' ? 'success' :
+                                poc.status === 'In Progress' ? 'warning' :
+                                    poc.status === 'Pending' ? 'error' :
+                                        poc.status === 'Initiated' ? 'info' :
+                                            'default'
+                        }
+                        variant="filled"
+                    />
+                );
+            }
         },
         // generateUsecase: {
         //     label: 'Generate Usecase',
@@ -356,12 +432,13 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
         // },
 
         // In the actions column configuration, update the render function
+        // In the actions column configuration, update the render function
         actions: {
             label: 'Actions',
             truncate: false,
             render: (poc) => {
-                // If status is "Initiated", disable all action buttons
-                if (poc.status === 'Initiated') {
+                // For admin users, always show all actions enabled
+                if (hasSalesAdminAccess) {
                     return (
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
                             <Tooltip title="View Details">
@@ -373,7 +450,42 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                                     <VisibilityIcon />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="Record is locked - Status is Initiated">
+                            <Tooltip title="Edit">
+                                <IconButton
+                                    size="small"
+                                    color="secondary"
+                                    onClick={() => handleEditPoc(poc)}
+                                >
+                                    <EditIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteClick(poc)}
+                                >
+                                    <DeleteIcon />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    );
+                }
+
+                // For non-admin users: Only enable edit/delete when status is "Draft"
+                if (poc.status !== 'Draft') {
+                    return (
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title="View Details">
+                                <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleViewDetails(poc)}
+                                >
+                                    <VisibilityIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title={`Record is locked - Status is ${poc.status}`}>
                                 <span>
                                     <IconButton
                                         size="small"
@@ -384,7 +496,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                                     </IconButton>
                                 </span>
                             </Tooltip>
-                            <Tooltip title="Record is locked - Status is Initiated">
+                            <Tooltip title={`Record is locked - Status is ${poc.status}`}>
                                 <span>
                                     <IconButton
                                         size="small"
@@ -399,44 +511,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                     );
                 }
 
-                // If generated_usecase exists, disable only Edit button, but keep View and Delete active
-                if (poc.generatedUsecase) {
-                    return (
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <Tooltip title="View Details">
-                                <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => handleViewDetails(poc)}
-                                >
-                                    <VisibilityIcon />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Record is locked - Usecase already generated">
-                                <span>
-                                    <IconButton
-                                        size="small"
-                                        color="secondary"
-                                        disabled
-                                    >
-                                        <EditIcon />
-                                    </IconButton>
-                                </span>
-                            </Tooltip>
-                            <Tooltip title="Delete POC Record">
-                                <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleDeleteClick(poc)}
-                                >
-                                    <DeleteIcon />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
-                    );
-                }
-
-                // Normal actions for records without generated_usecase and status not "Initiated"
+                // For non-admin users with "Draft" status - show all actions enabled
                 return (
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Tooltip title="View Details">
@@ -513,15 +588,15 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             );
 
             // Also update the generated_usecase in poc_details table
-            await axios.put(`http://localhost:5050/poc/updateGeneratedUsecase/${pocId}`,
-                { generatedUsecase: selectedType },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
+            // await axios.put(`http://localhost:5050/poc/updateGeneratedUsecase/${pocId}`,
+            //     { generatedUsecase: selectedType },
+            //     {
+            //         headers: {
+            //             'Authorization': `Bearer ${token}`,
+            //             'Content-Type': 'application/json'
+            //         }
+            //     }
+            // );
 
             // Update local state
             setPocData(prevData =>
@@ -627,7 +702,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
     };
 
     const truncateText = (text, maxLength = 30) => {
-        if (!text) return 'N/A';
+        if (!text) return '-';
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';
     };
@@ -643,27 +718,21 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
         setSelectedPoc(null);
     };
 
-    const handleEditPoc = (poc) => {
-        // Prevent editing if status is "Initiated"
-        if (poc.status === 'Initiated') {
-            showSnackbar('Cannot edit record with "Initiated" status', 'warning');
-            return;
+    const handleEditPoc = async (poc) => {
+        try {
+            // Show snackbar and navigate to edit page
+            showSnackbar(`Editing POC: ${poc.id}`, 'info');
+
+            // Navigate to edit page with the record data
+            navigate('/edit-poc', { state: { editRecord: poc } });
+
+        } catch (error) {
+            console.error('Error preparing edit:', error);
+            // Any pre-validation errors will be caught here
         }
-
-        // Show snackbar and navigate to edit page
-        showSnackbar(`Editing POC: ${poc.id}`, 'info');
-
-        // Navigate to edit page with the record data
-        navigate('/edit-poc', { state: { editRecord: poc } });
     };
 
     const handleDeleteClick = (poc) => {
-        // Prevent deleting if status is "Initiated"
-        if (poc.status === 'Initiated') {
-            showSnackbar('Cannot delete record with "Initiated" status', 'warning');
-            return;
-        }
-
         setPocToDelete(poc);
         setDeleteConfirmOpen(true);
     };
@@ -675,7 +744,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
         try {
             const token = localStorage.getItem('authToken');
-            await axios.delete(`http://localhost:5050/poc/deletePoc/${pocToDelete.id}`, {
+            const response = await axios.delete(`http://localhost:5050/poc/deleteInitiatedPoc/${pocToDelete.id}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -684,9 +753,15 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             // Remove the deleted item from local state
             setPocData(prevData => prevData.filter(item => item.id !== pocToDelete.id));
             showSnackbar('POC record deleted successfully', 'success');
+
         } catch (error) {
             console.error('Error deleting POC:', error);
-            showSnackbar('Failed to delete POC record', 'error');
+            if (error.response?.status === 403) {
+                // Status validation failed from backend
+                showSnackbar(error.response.data.message, 'warning');
+            } else {
+                showSnackbar('Failed to delete POC record', 'error');
+            }
         } finally {
             setDeleteConfirmOpen(false);
             setPocToDelete(null);
@@ -730,7 +805,11 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                     </Typography>
                     <Typography variant="body2" color="inherit" sx={{ mr: 2 }}>
                         Welcome, {currentUser?.emp_name}
-                        {currentUser?.emp_id && ` (${currentUser.emp_id})`}
+                        {currentUser?.emp_id && (
+                            currentUser.emp_id === 'AE00'
+                                ? ` (${currentUser.salesperson_email || currentUser.email || '-'})`
+                                : ` (${currentUser.emp_id})`
+                        )}
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>Logout</Button>
                 </Toolbar>
@@ -945,11 +1024,11 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                                                                 {config.render ? (
                                                                     config.render(poc)
                                                                 ) : (
-                                                                    <Tooltip title={poc[key] || 'N/A'}>
+                                                                    <Tooltip title={poc[key] || '-'}>
                                                                         <span>
                                                                             {config.truncate ?
                                                                                 truncateText(poc[key], config.truncate) :
-                                                                                (poc[key] || 'N/A')
+                                                                                (poc[key] || '-')
                                                                             }
                                                                         </span>
                                                                     </Tooltip>
@@ -1100,7 +1179,7 @@ const DetailItem = ({ label, value, render }) => (
             render(value)
         ) : (
             <Typography variant="body1">
-                {value || 'N/A'}
+                {value || '-'}
             </Typography>
         )}
     </Box>
