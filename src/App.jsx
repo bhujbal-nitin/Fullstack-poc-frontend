@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import Dashboard from "./components/Dashboard";
 import LoginPage from "./components/LoginPage";
 import PocTable from "./components/PocTable";
+import Admin from "./components/Admin"; // 👈 Add this line
+
 import axios from "axios";
 import "./App.css";
 import Report from "./components/Report";
@@ -10,6 +12,8 @@ import StatusComponent from "./components/StatusComponent";
 import InitiateUsecase from "./components/InitiateUsecase";
 import InitiateUsecaseTable from "./components/InitiateUsecaseTable";
 import InitiateUsecaseEdit from './components/InitiateUsecaseEdit';
+import SalesTable from "./components/sales/SalesTable";
+import SalesStatusComponent from "./components/sales/SalesStatusComponent";
 
 import {
   AppBar,
@@ -539,6 +543,44 @@ function AppContent() {
           element={
             <ProtectedRoute>
               {renderConfirmation()}
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/sales-Info"
+          element={
+            <ProtectedRoute>
+              <SalesTable
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sales-status-tracker"
+          element={
+            <ProtectedRoute>
+              <SalesStatusComponent
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <Admin
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
             </ProtectedRoute>
           }
         />

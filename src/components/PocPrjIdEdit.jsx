@@ -97,7 +97,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     // Dropdown options
     const [salesPersons, setSalesPersons] = useState([]);
     const [regions, setRegions] = useState([]);
-    const [users, setUsers] = useState([]);
+    // Change from storing strings to objects
+    const [users, setUsers] = useState([]); // Change to store user objects
     const [createdByOptions, setCreatedByOptions] = useState([]);
     const [tagOptions, setTagOptions] = useState([]);
     const [approverOptions, setApproverOptions] = useState([]);
@@ -230,7 +231,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     setSalesPersons(salesData.length > 0 ? salesData : ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
                 } catch (salesError) {
                     console.error('Error fetching sales persons:', salesError);
-                    setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
+                    // setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
                 }
 
                 // Fetch Assigned To options from API
@@ -240,11 +241,13 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             'Authorization': `Bearer ${token}`
                         }
                     });
-                    const assignToData = processApiData(assignToResponse.data);
-                    setUsers(assignToData.length > 0 ? assignToData : ['admin', 'manager', 'developer', 'tester', 'analyst']);
+
+                    // Store the raw response data directly
+                    // Assuming it returns array of objects with name and email
+                    setUsers(assignToResponse.data || []);
                 } catch (assignToError) {
                     console.error('Error fetching assigned to options:', assignToError);
-                    setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
+                    setUsers([]);
                 }
 
                 // Fetch Created By options from API with emp_name parameter
@@ -283,7 +286,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     setApproverOptions(approversData.length > 0 ? approversData : ['admin', 'manager', 'supervisor']);
                 } catch (approversError) {
                     console.error('Error fetching approved by options:', approversError);
-                    setApproverOptions(['admin', 'manager', 'supervisor']);
+                    // setApproverOptions(['admin', 'manager', 'supervisor']);
                 }
 
                 // Load other dropdown data
@@ -293,12 +296,12 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
                 // Fallback to dummy data if API fails
-                setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
-                setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
-                setCreatedByOptions(['admin', 'manager', 'user']);
-                setApproverOptions(['admin', 'manager', 'supervisor']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+                // setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
+                // setRegions(['ROW', 'ISSARC', 'America', 'Other']);
+                // setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
+                // setCreatedByOptions(['admin', 'manager', 'user']);
+                // setApproverOptions(['admin', 'manager', 'supervisor']);
+                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -309,6 +312,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
     // Multi-user selection handlers
     const handleOpenUserDialog = () => {
+        // assignedTo should contain email addresses
         setSelectedUsers([...assignedTo]);
         setUserDialogOpen(true);
     };
@@ -325,13 +329,14 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         setUserDialogOpen(false);
     };
 
-    const handleToggleUser = (user) => {
+    const handleToggleUser = (userEmail) => {  // Accept email directly
         setSelectedUsers(prev =>
-            prev.includes(user)
-                ? prev.filter(u => u !== user)
-                : [...prev, user]
+            prev.includes(userEmail)
+                ? prev.filter(u => u !== userEmail)
+                : [...prev, userEmail]
         );
     };
+
 
     const handleSelectAllUsers = () => {
         setSelectedUsers(users);
@@ -353,7 +358,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
         if (!salesPerson) newErrors.salesPerson = 'Sales Person is required';
         if (assignedTo.length === 0) newErrors.assignedTo = 'At least one user must be assigned';
-        if (!createdBy) newErrors.createdBy = 'Created By is required';
+        // if (!createdBy) newErrors.createdBy = 'Created By is required';
         if (!startDate) newErrors.startDate = 'Start Date is required';
         if (!endDate) newErrors.endDate = 'End Date is required';
         if (!region) newErrors.region = 'Region is required';
@@ -394,7 +399,15 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     spocEmail,
                     spocDesignation,
                     tags: tags?.length ? tags.join(',') : null,
-                    assignedTo: assignedTo?.length ? assignedTo.join(',') : null,
+                    assignedTo: assignedTo?.length
+                        ? assignedTo
+                            .map(email => {
+                                const user = users.find(u => u.email === email);
+                                return user?.name || email; // fallback unchanged
+                            })
+                            .join(',')
+                        : null,
+
                     remark: remark || null,
                     actualStartDate: normalizeDate(actualStartDate),
                     actualEndDate: normalizeDate(actualEndDate),
@@ -436,6 +449,18 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
             }
         }
     };
+
+    // Add this useEffect after your state declarations
+    useEffect(() => {
+        // If createdBy is empty, set it from the API data or current user
+        if (!createdBy && poc?.createdBy) {
+            setCreatedBy(poc.createdBy);
+        } else if (!createdBy) {
+            // Fallback to current user name
+            setCreatedBy(getemp_name() || 'System');
+        }
+    }, [createdBy, poc?.createdBy]);
+
     const handleTagSelect = (tag) => {
         if (!tags.includes(tag)) {
             setTags([...tags, tag]);
@@ -718,15 +743,23 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                         Selected team members:
                                     </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                                        {assignedTo.map(user => (
-                                            <Chip
-                                                key={user}
-                                                label={user}
-                                                size="small"
-                                                onDelete={() => setAssignedTo(prev => prev.filter(u => u !== user))}
-                                                avatar={<Avatar sx={{ width: 24, height: 24 }}>{user.charAt(0)}</Avatar>}
-                                            />
-                                        ))}
+                                        {assignedTo.map(email => {
+                                            // Find user by email to get name
+                                            const user = users.find(u => u.email === email);
+                                            const displayName = user ? user.name : email;
+
+                                            return (
+                                                <Chip
+                                                    key={email}
+                                                    label={displayName} // Show NAME in chip
+                                                    size="small"
+                                                    onDelete={() => setAssignedTo(prev => prev.filter(u => u !== email))}
+                                                    avatar={<Avatar sx={{ width: 24, height: 24 }}>
+                                                        {displayName.charAt(0).toUpperCase()}
+                                                    </Avatar>}
+                                                />
+                                            );
+                                        })}
                                     </Box>
                                 </Box>
                             )}
@@ -1137,33 +1170,44 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     </Box>
 
                     <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                        {users.map((user, index) => (
-                            <ListItem key={`${user}-${index}`} disablePadding>
-                                <ListItemButton onClick={() => handleToggleUser(user)}>
-                                    <ListItemIcon>
-                                        <Checkbox
-                                            edge="start"
-                                            checked={selectedUsers.includes(user)}
-                                            tabIndex={-1}
-                                            disableRipple
+                        {users.map((user, index) => {
+                            // Get the actual email from API response
+                            const userEmail = user.email || user;
+
+                            // Get the display name for avatar
+                            const userName = user.name || user.email || user;
+
+                            return (
+                                <ListItem key={`${userEmail}-${index}`} disablePadding>
+                                    <ListItemButton onClick={() => handleToggleUser(userEmail)}>
+                                        <ListItemIcon>
+                                            <Checkbox
+                                                edge="start"
+                                                checked={selectedUsers.includes(userEmail)}
+                                                tabIndex={-1}
+                                                disableRipple
+                                            />
+                                        </ListItemIcon>
+                                        <ListItemText
+                                            primary={userName} // Show NAME as primary text
+                                            secondary={userEmail} // Show EMAIL as secondary text
                                         />
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary={user}
-                                        secondary={`${user.toLowerCase()}@company.com`}
-                                    />
-                                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                                        {user.charAt(0).toUpperCase()}
-                                    </Avatar>
-                                </ListItemButton>
-                            </ListItem>
-                        ))}
+                                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                                            {userName.charAt(0).toUpperCase()}
+                                        </Avatar>
+                                    </ListItemButton>
+                                </ListItem>
+                            );
+                        })}
                     </List>
 
                     {selectedUsers.length > 0 && (
                         <Box sx={{ mt: 2 }}>
                             <Typography variant="body2" color="text.secondary">
-                                Selected: {selectedUsers.join(', ')}
+                                Selected: {selectedUsers.map(email => {
+                                    const user = users.find(u => u.email === email || u === email);
+                                    return user?.name || email;
+                                }).join(', ')}
                             </Typography>
                         </Box>
                     )}

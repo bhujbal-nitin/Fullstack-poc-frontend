@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Bar, Doughnut, Line, Pie } from "react-chartjs-2";
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import 'chartjs-plugin-datalabels';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,7 +21,6 @@ import {
   AppBar,
   Toolbar,
   Typography,
-  IconButton,
   Button,
   Box,
   Card,
@@ -32,10 +33,9 @@ import {
   CircularProgress,
   Alert,
   Divider,
-  Tabs,
-  Tab,
   useTheme,
-  useMediaQuery,
+  useMediaQuery,     // Add this
+
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -50,11 +50,15 @@ import {
   BarChart as BarChartIcon,
   CheckCircle as CheckCircleIcon,
   PlayArrow as PlayArrowIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  MonetizationOn as MonetizationOnIcon
 
 } from "@mui/icons-material";
 
-// Register ChartJS components
+
+
+
+// Register ChartJS components - UPDATED VERSION
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -64,7 +68,9 @@ ChartJS.register(
   Legend,
   ArcElement,
   LineElement,
-  PointElement
+  PointElement,
+  ChartDataLabels,
+  // ChartDataLabels // Remove this line for now
 );
 
 // Tab Panel component
@@ -121,6 +127,9 @@ const StatCard = ({ title, value, icon, color, subtitle }) => (
   </Card>
 );
 
+
+
+
 const Report = ({ onNavigate, onLogout, user }) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -137,13 +146,21 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const [regionFilter, setRegionFilter] = useState("");
   const [pocTypeFilter, setPocTypeFilter] = useState("");
   const [activeTab, setActiveTab] = useState(0);
-  const [dateRange, setDateRange] = useState("all");
+  const [dateRange, setDateRange] = useState("last365");
   const [chartType, setChartType] = useState("bar");
   const [overdueUsecases, setOverdueUsecases] = useState([]);
-
+  const [pocConversionChartData, setPocConversionChartData] = useState(null);
+  const [salesPersonsConversionRate, setSalesPersonsConversionRate] = useState({});
+  // Add this with other useState declarations:
+  const [salesReportActive, setSalesReportActive] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const [monthlyChartData, setMonthlyChartData] = useState(null);
+
+  const [salesPersonChartData, setSalesPersonChartData] = useState(null);
+
 
   useEffect(() => {
     fetchInitialData();
@@ -156,7 +173,11 @@ const Report = ({ onNavigate, onLogout, user }) => {
     updateClientTypeChartData();
     updateClientTypePieChartData();
     updateOverdueUsecases();
+    updateMonthlyChartData();
+    updateSalesPersonChartData();
+    updatePocConversionChartData();
   }, [reports, startDate, endDate, pocTypes, statusTypes, regionFilter, pocTypeFilter, dateRange]);
+
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("authToken");
@@ -164,31 +185,21 @@ const Report = ({ onNavigate, onLogout, user }) => {
     setError("");
 
     try {
+      // Fetch POC types
       const typesResponse = await axios.get("http://localhost:5050/poc/getPocTypes", {
         headers: { Authorization: `Bearer ${token}` }
       });
       const typesData = Array.isArray(typesResponse.data) ? typesResponse.data : [];
       setPocTypes(typesData);
-    } catch (error) {
-      console.error("Error fetching Usecase types:", error);
-      const extractedTypes = extractPocTypesFromReports(reports);
-      console.log(extractedTypes)
-      setPocTypes(extractedTypes);
-    }
 
-    try {
+      // Fetch status types
       const statusResponse = await axios.get("http://localhost:5050/poc/getStatusTypes", {
         headers: { Authorization: `Bearer ${token}` }
       });
       const statusData = Array.isArray(statusResponse.data) ? statusResponse.data : [];
       setStatusTypes(statusData);
-    } catch (error) {
-      console.error("Error fetching status types:", error);
-      const extractedStatuses = extractStatusTypesFromReports(reports);
-      setStatusTypes(extractedStatuses);
-    }
 
-    try {
+      // Fetch reports
       const reportsResponse = await axios.get("http://localhost:5050/poc/getReports", {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -196,10 +207,12 @@ const Report = ({ onNavigate, onLogout, user }) => {
       setReports(reportsData);
 
     } catch (error) {
-      console.error("Error fetching reports:", error);
-      setError("Failed to load reports. Showing sample data.");
-      const sampleData = generateSampleData();
-      setReports(sampleData);
+      console.error("Error fetching data:", error);
+      setError("Failed to load dashboard data. Please check your connection and try again.");
+      // Set all to empty arrays
+      setPocTypes([]);
+      setStatusTypes([]);
+      setReports([]);
     }
 
     setLoading(false);
@@ -211,6 +224,596 @@ const Report = ({ onNavigate, onLogout, user }) => {
       if (report.status) statuses.add(report.status);
     });
     return Array.from(statuses).filter(status => status).sort();
+  };
+
+  const updateSalesPersonChartData = () => {
+    const filtered = filterReports();
+
+    if (filtered.length === 0) {
+      setSalesPersonChartData({
+        labels: ['No Data Available'],
+        datasets: [{
+          label: 'Number of Usecases',
+          data: [0],
+          backgroundColor: 'rgba(120, 120, 120, 0.6)',
+        }]
+      });
+      return;
+    }
+
+
+
+
+    // Extract sales persons from reports
+    const salesPersons = {};
+    const allStatuses = new Set();
+    const salesPersonTotals = {}; // NEW: Store totals per sales person
+
+    filtered.forEach(report => {
+      const salesPerson = report.sales_person || report.salesPerson || 'Unknown';
+      const status = report.status || 'Unknown';
+
+      if (salesPerson) {
+        if (!salesPersons[salesPerson]) {
+          salesPersons[salesPerson] = {};
+          salesPersonTotals[salesPerson] = 0; // Initialize total
+        }
+
+        // Count by status
+        salesPersons[salesPerson][status] = (salesPersons[salesPerson][status] || 0) + 1;
+        salesPersonTotals[salesPerson]++; // Increment total count
+        allStatuses.add(status);
+      }
+    });
+
+    const labels = Object.keys(salesPersons).sort();
+    const statuses = Array.from(allStatuses).filter(status => status).sort();
+
+    // Define status colors
+    const getStatusColor = (status) => {
+      const statusLower = status?.toLowerCase();
+      if (statusLower.includes('completed') || statusLower.includes('done') || statusLower.includes('success'))
+        return 'rgba(76, 175, 80, 0.9)'; // Green
+      if (statusLower.includes('converted'))
+        return 'rgba(156, 39, 176, 0.9)'; // Purple
+      if (statusLower.includes('progress') || statusLower.includes('ongoing'))
+        return 'rgba(255, 152, 0, 0.9)'; // Orange
+      if (statusLower.includes('pending') || statusLower.includes('waiting') || statusLower.includes('awaiting') || statusLower.includes('planned'))
+        return 'rgba(33, 150, 243, 0.9)'; // Blue
+      if (statusLower.includes('draft'))
+        return 'rgba(255, 193, 7, 0.9)'; // Yellow
+      if (statusLower.includes('dropped'))
+        return 'rgba(96, 125, 139, 0.9)'; // Blue Grey
+      if (statusLower.includes('hold'))
+        return 'rgba(255, 87, 34, 0.9)'; // Deep Orange
+      if (statusLower.includes('cancel') || statusLower.includes('reject') || statusLower.includes('failed'))
+        return 'rgba(244, 67, 54, 0.9)'; // Red
+      return 'rgba(158, 158, 158, 0.9)'; // Grey
+    };
+
+    // Create datasets for each status
+    const datasets = statuses.map(status => ({
+      label: status,
+      data: labels.map(person => salesPersons[person][status] || 0),
+      backgroundColor: getStatusColor(status),
+      borderColor: getStatusColor(status).replace('0.9', '1'),
+      borderWidth: 1,
+      borderRadius: 4,
+      barPercentage: 0.8,
+      categoryPercentage: 0.8,
+    }));
+
+    setSalesPersonChartData({
+      labels: labels,
+      datasets: datasets,
+      // NEW: Store totals for each sales person
+      totals: labels.map(person => salesPersonTotals[person] || 0)
+    });
+  };
+
+  const updatePocConversionChartData = () => {
+    // Generate data for ANY selected POC type when in Sales Report mode
+    const filtered = filterReports();
+
+    if (filtered.length === 0) {
+      setPocConversionChartData({
+        labels: ['No Data Available'],
+        datasets: [
+          {
+            label: 'Completed Usecases',
+            data: [0],
+            backgroundColor: 'rgba(76, 175, 80, 0.7)',
+          },
+          {
+            label: 'Converted Usecases',
+            data: [0],
+            backgroundColor: 'rgba(156, 39, 176, 0.7)',
+          }
+        ]
+      });
+      return;
+    }
+
+    // Extract sales persons from reports and count completed/converted
+    const salesPersons = {};
+
+    filtered.forEach(report => {
+      const salesPerson = report.sales_person || report.salesPerson || 'Unknown';
+      if (salesPerson) {
+        if (!salesPersons[salesPerson]) {
+          salesPersons[salesPerson] = {
+            completedOnly: 0,
+            converted: 0,
+            totalCompleted: 0
+          };
+        }
+
+        const status = report.status?.toLowerCase() || '';
+
+        // Check if converted
+        if (status.includes('converted')) {
+          salesPersons[salesPerson].converted++;
+          salesPersons[salesPerson].totalCompleted++;
+        }
+        // Check if completed but NOT converted
+        else if (status.includes('completed') || status.includes('done') || status.includes('success')) {
+          salesPersons[salesPerson].completedOnly++;
+          salesPersons[salesPerson].totalCompleted++;
+        }
+      }
+    });
+
+    // Filter out sales persons with zero totalCompleted
+    const filteredSalesPersons = {};
+    Object.keys(salesPersons).forEach(person => {
+      if (salesPersons[person].totalCompleted > 0) {
+        filteredSalesPersons[person] = salesPersons[person];
+      }
+    });
+
+    const labels = Object.keys(filteredSalesPersons).sort();
+
+    if (labels.length === 0) {
+      setPocConversionChartData({
+        labels: ['No Data Available'],
+        datasets: [
+          {
+            label: 'Completed Usecases',
+            data: [0],
+            backgroundColor: 'rgba(76, 175, 80, 0.7)',
+          },
+          {
+            label: 'Converted Usecases',
+            data: [0],
+            backgroundColor: 'rgba(156, 39, 176, 0.7)',
+          }
+        ]
+      });
+      setSalesPersonsConversionRate({});
+      return;
+    }
+
+    // Calculate conversion rates
+    const conversionRates = {};
+    labels.forEach(person => {
+      const { totalCompleted, converted } = filteredSalesPersons[person];
+      conversionRates[person] = totalCompleted > 0
+        ? Math.round((converted / totalCompleted) * 100)
+        : 0;
+    });
+
+    setSalesPersonsConversionRate(conversionRates);
+
+    setPocConversionChartData({
+      labels: labels,
+      datasets: [
+        {
+          label: 'Completed Usecases',
+          data: labels.map(person => filteredSalesPersons[person].totalCompleted),
+          backgroundColor: 'rgba(76, 175, 80, 0.9)',
+          borderColor: 'rgba(76, 175, 80, 1)',
+          borderWidth: 2,
+          borderRadius: 8,
+          barPercentage: 0.6,
+          categoryPercentage: 0.8,
+        },
+        {
+          label: 'Converted Usecases',
+          data: labels.map(person => filteredSalesPersons[person].converted),
+          backgroundColor: 'rgba(156, 39, 176, 0.9)',
+          borderColor: 'rgba(156, 39, 176, 1)',
+          borderWidth: 2,
+          borderRadius: 8,
+          barPercentage: 0.6,
+          categoryPercentage: 0.8,
+        }
+      ]
+    });
+  };
+
+  // Enhanced chart options with better styling
+  const chartOptions = {
+
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          font: { size: 14, weight: 'bold' },
+          padding: 20,
+          usePointStyle: true,
+          pointStyle: 'circle'
+        }
+      },
+      title: {
+        display: true,
+        text: ' USECASES BY TYPE',
+        font: { size: 20, weight: 'bold' },
+        padding: { top: 10, bottom: 20 },
+        color: theme.palette.primary.main
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        titleFont: { size: 14, weight: 'bold' },
+        bodyFont: { size: 13 },
+        padding: 12,
+        cornerRadius: 8,
+        usePointStyle: true,
+      },
+      // Update datalabels configuration for bar charts
+      datalabels: {
+        display: true,
+        color: '#333333',
+        font: {
+          size: 12,
+          weight: 'bold'
+        },
+        formatter: function (value, context) {
+          return value > 0 ? value : '';
+        },
+        anchor: 'end',
+        align: 'top',
+        offset: 15, // Increased offset for more gap
+        clip: false
+      }
+
+    },
+    scales: {
+      x: {
+        grid: {
+          display: true,
+          color: 'rgba(0, 0, 0, 0.05)'
+        },
+        ticks: {
+          font: { size: 12, weight: 'bold' },
+          maxRotation: 45
+        }
+      },
+      y: {
+        beginAtZero: true,
+        suggestedMax: function (context) {
+          const chart = context.chart;
+          const datasets = chart.data.datasets;
+          let maxValue = 0;
+
+          datasets.forEach(dataset => {
+            const datasetMax = Math.max(...dataset.data);
+            if (datasetMax > maxValue) maxValue = datasetMax;
+          });
+
+          if (maxValue === 0) return 5;
+          // Add more space at top for labels (increased from 10% to 25%)
+          const extra = Math.max(2, Math.ceil(maxValue * 0.25));
+          return maxValue + extra;
+        },
+        ticks: {
+          stepSize: 1,
+          font: { size: 12, weight: 'bold' },
+          precision: 0
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.08)',
+          drawBorder: false
+        }
+      }
+    },
+    animation: {
+      duration: 1500,
+      easing: 'easeOutQuart'
+    },
+    // Add these at the chart level
+    barPercentage: 0.8,
+    categoryPercentage: 0.8,
+  };
+
+
+  const salesPersonChartOptions = {
+    ...chartOptions,
+    plugins: {
+      ...chartOptions.plugins,
+      title: {
+        ...chartOptions.plugins.title,
+        text: '👤 USECASES BY SALES PERSON (Status-wise)',
+        padding: {
+          top: 5,      // Space above title
+          bottom: 15   // Space between title and chart (INCREASED)
+        },
+        font: {
+          size: 20,   // Slightly larger title
+          weight: 'bold'
+        }
+      },
+      totalLabels: {
+        display: true,
+        color: '#333333',
+        font: {
+          size: 14,
+          weight: 'bold'
+        },
+        padding: 15
+      },
+      datalabels: {
+        display: true,
+        color: function (context) {
+          // Improved color detection logic
+          const backgroundColor = context.dataset.backgroundColor;
+
+          // If it's a single color (not an array), use that
+          if (typeof backgroundColor === 'string') {
+            const color = backgroundColor;
+            if (color && color.includes('rgba')) {
+              const rgb = color.match(/\d+/g);
+              if (rgb && rgb.length >= 3) {
+                const r = parseInt(rgb[0]);
+                const g = parseInt(rgb[1]);
+                const b = parseInt(rgb[2]);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                return brightness > 180 ? '#000000' : '#ffffff'; // Adjusted threshold
+              }
+            }
+          }
+          // If it's an array (different colors for each bar)
+          else if (Array.isArray(backgroundColor)) {
+            const color = backgroundColor[context.dataIndex];
+            if (color && color.includes('rgba')) {
+              const rgb = color.match(/\d+/g);
+              if (rgb && rgb.length >= 3) {
+                const r = parseInt(rgb[0]);
+                const g = parseInt(rgb[1]);
+                const b = parseInt(rgb[2]);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                return brightness > 180 ? '#000000' : '#ffffff';
+              }
+            }
+          }
+
+          // Fallback to black for high contrast
+          return '#000000';
+        },
+        font: {
+          size: 10,
+          weight: 'bold',
+          family: 'Arial, sans-serif'
+        },
+        anchor: 'center',
+        align: 'center',
+        offset: 0,
+        clip: false,
+        formatter: function (value) {
+          return value > 0 ? value : '';
+        }
+      },
+      tooltip: {
+        ...chartOptions.plugins.tooltip,
+        callbacks: {
+          label: function (context) {
+            return `${context.dataset.label}: ${context.parsed.y}`;
+          },
+          footer: function (tooltipItems) {
+            const total = tooltipItems.reduce(
+              (sum, item) => sum + item.parsed.y,
+              0
+            );
+            return `Total: ${total}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        stacked: true,
+        grid: {
+          display: false
+        },
+        ticks: {
+          font: {
+            size: isMobile ? 10 : 12,
+            weight: 'bold'
+          },
+          maxRotation: 45,
+          minRotation: 45,
+          autoSkip: false,
+          padding: 20,
+          callback: function (value, index, values) {
+            const label = this.getLabelForValue(value);
+            const isMobile = window.innerWidth < 768;
+
+            if (isMobile) {
+              if (label.length > 10) {
+                return label.substring(0, 8) + '...';
+              }
+            } else {
+              if (label.length > 20) {
+                return label.substring(0, 18) + '...';
+              }
+            }
+            return label;
+          }
+        }
+      },
+      y: {
+        stacked: true,
+        beginAtZero: true,
+        suggestedMax: function (context) {
+          const datasets = context.chart.data.datasets;
+          let maxTotal = 0;
+
+          // Sum all visible datasets (not transparent ones)
+          const visibleDatasets = datasets.filter(ds =>
+            ds.backgroundColor !== 'transparent' && ds.borderColor !== 'transparent'
+          );
+          const points = visibleDatasets[0]?.data?.length || 0;
+
+          for (let i = 0; i < points; i++) {
+            let sum = 0;
+            visibleDatasets.forEach(ds => sum += ds.data[i] || 0);
+            maxTotal = Math.max(maxTotal, sum);
+          }
+
+          // Add extra space for total labels and segment labels
+          return maxTotal + Math.ceil(maxTotal * 0.3);
+        },
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+          font: {
+            size: 12,
+            weight: 'bold'
+          }
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.08)',
+          drawBorder: false
+        }
+      }
+    },
+    // Adjust layout padding
+    layout: {
+      padding: {
+        top: 50, // Increased for total labels
+        bottom: 10,
+        left: 10,
+        right: 10
+      }
+    },
+    // Ensure all elements are visible
+    elements: {
+      bar: {
+        borderWidth: 1,
+        borderRadius: 2,
+        borderSkipped: false
+      }
+    }
+  };
+
+
+  const pocConversionChartOptions = {
+    ...chartOptions,
+    plugins: {
+      ...chartOptions.plugins,
+      title: {
+        ...chartOptions.plugins.title,
+        text: '💰 POC CONVERSION BY SALES PERSON'
+      },
+      tooltip: {
+        ...chartOptions.plugins.tooltip,
+        callbacks: {
+          label: function (context) {
+            const label = context.dataset.label || '';
+            const value = context.parsed.y;
+            const salesPerson = context.label;
+            const datasetIndex = context.datasetIndex;
+            const chart = context.chart;
+
+            const completedData = chart.data.datasets[0].data[context.dataIndex];
+            const convertedData = chart.data.datasets[1].data[context.dataIndex];
+
+            if (label === 'Completed Usecases') {
+              const conversionRate = salesPersonsConversionRate?.[salesPerson] || 0;
+              const regularCompleted = completedData - convertedData;
+
+              return [
+                `✅ Total Completed: ${completedData}`,
+                `   - Regular Completed: ${regularCompleted}`,
+                `   - Converted: ${convertedData}`,
+                `📈 Conversion Rate: ${conversionRate}%`
+              ];
+            } else if (label === 'Converted Usecases') {
+              const conversionRate = salesPersonsConversionRate?.[salesPerson] || 0;
+              const totalCompleted = completedData;
+
+              return [
+                `💰 Converted: ${value}`,
+                `📊 Part of Total Completed: ${totalCompleted}`,
+                `🎯 Conversion Rate: ${conversionRate}%`
+              ];
+            }
+            return `${label}: ${value}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false
+        },
+        ticks: {
+          font: {
+            size: isMobile ? 10 : 11,
+            weight: 'bold'
+          },
+          maxRotation: 45,
+          minRotation: 45,
+          padding: 20,
+          autoSkip: false,
+          maxTicksLimit: isMobile ? 8 : 15,
+          callback: function (value, index, values) {
+            // Truncate long names
+            const label = this.getLabelForValue(value);
+            if (label.length > 25) {
+              return label.substring(0, 12) + '...';
+            }
+            return label;
+          }
+        }
+      },
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Number of Usecases',
+          font: {
+            size: 14,
+            weight: 'bold'
+          }
+        },
+        ticks: {
+          stepSize: 1,
+          precision: 0
+        }
+      }
+    },
+    elements: {
+      bar: {
+        borderWidth: 2,
+        borderRadius: 4,
+      }
+    },
+    // Adjust bar grouping
+    barPercentage: 0.8,
+    categoryPercentage: 0.7,
+    // Add layout padding for labels
+    layout: {
+      padding: {
+        top: 20,
+        bottom: 60, // Increased bottom padding for rotated labels
+        left: 10,
+        right: 10
+      }
+    }
   };
 
   const extractPocTypesFromReports = (reportsData) => {
@@ -237,41 +840,145 @@ const Report = ({ onNavigate, onLogout, user }) => {
     return regions.sort();
   };
 
-  
+  const updateMonthlyChartData = () => {
+    const filtered = filterReports(); // Now uses only main filters
 
-  const handleDateRangeChange = (range) => {
-    setDateRange(range);
+    if (filtered.length === 0) {
+      setMonthlyChartData({
+        labels: ['No Data Available'],
+        datasets: [{
+          label: 'Number of Usecases',
+          data: [0],
+          backgroundColor: 'rgba(120, 120, 120, 0.6)',
+          borderColor: 'rgba(120, 120, 120, 1)',
+          borderWidth: 2,
+        }]
+      });
+      return;
+    }
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Determine date range for filtering
+    let startDateForChart = new Date();
+    let endDateForChart = new Date();
+
+    if (dateRange === 'last30') {
+      startDateForChart.setDate(startDateForChart.getDate() - 30);
+    } else if (dateRange === 'last90') {
+      startDateForChart.setDate(startDateForChart.getDate() - 90);
+    } else if (dateRange === 'last180') {
+      startDateForChart.setDate(startDateForChart.getDate() - 180);
+    } else if (dateRange === 'last365') {
+      startDateForChart.setDate(startDateForChart.getDate() - 365);
+    } if (dateRange === 'custom' && startDate && endDate) {
+      startDateForChart = new Date(startDate);
+      endDateForChart = new Date(endDate);
+    } else if (dateRange === 'all') {
+      // For "all", find earliest and latest dates from filtered data
+      const dates = filtered
+        .map(r => r.start_date ? new Date(r.start_date) : null)
+        .filter(d => d);
+
+      if (dates.length > 0) {
+        startDateForChart = new Date(Math.min(...dates));
+        endDateForChart = new Date(Math.max(...dates));
+      } else {
+        // Default to last 12 months if no dates
+        startDateForChart.setMonth(startDateForChart.getMonth() - 11);
+      }
+    }
+
+    // Generate all months between start and end dates
+    const months = [];
+    let currentDate = new Date(startDateForChart);
+    currentDate.setDate(1); // Start from first day of month
+
+    while (currentDate <= endDateForChart) {
+      const monthYear = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+      months.push(monthYear);
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+
+    // Remove duplicates while preserving order
+    const uniqueMonths = [...new Set(months)];
+
+    // Count usecases by month
+    const monthlyCounts = {};
+    uniqueMonths.forEach(month => {
+      monthlyCounts[month] = 0;
+    });
+
+    filtered.forEach(report => {
+      if (report.start_date) {
+        const reportDate = new Date(report.start_date);
+        const monthYear = `${monthNames[reportDate.getMonth()]} ${reportDate.getFullYear()}`;
+
+        if (monthlyCounts.hasOwnProperty(monthYear)) {
+          monthlyCounts[monthYear]++;
+        }
+      }
+    });
+
+    const backgroundColors = getVibrantColors(uniqueMonths.length);
+
+    setMonthlyChartData({
+      labels: uniqueMonths,
+      datasets: [
+        {
+          label: 'Number of Usecases',
+          data: uniqueMonths.map(month => monthlyCounts[month]),
+          backgroundColor: backgroundColors,
+          borderColor: backgroundColors.map(color => color.replace('0.9', '1')),
+          borderWidth: 3,
+          borderRadius: 8,
+          fill: chartType === 'line',
+          tension: 0.4,
+        },
+      ],
+    });
+  };
+
+
+  // Update this useEffect to handle dateRange changes
+  useEffect(() => {
     const today = new Date();
+    const last365 = new Date(today);
 
-    switch (range) {
+    switch (dateRange) {
       case 'last30':
-        const last30 = new Date(today);
-        last30.setDate(last30.getDate() - 30);
-        setStartDate(last30.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
+        last365.setDate(last365.getDate() - 30);
         break;
       case 'last90':
-        const last90 = new Date(today);
-        last90.setDate(last90.getDate() - 90);
-        setStartDate(last90.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
+        last365.setDate(last365.getDate() - 90);
         break;
-      case 'last365':  // Add this case for Last 1 Year
-        const last365 = new Date(today);
+      case 'last180':
+        last365.setDate(last365.getDate() - 180);
+        break;
+      case 'last365':
         last365.setDate(last365.getDate() - 365);
-        setStartDate(last365.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
-        break;
-      case 'custom':
-        setStartDate('');
-        setEndDate('');
         break;
       case 'all':
+        // For "all", don't set specific dates
+        setStartDate("");
+        setEndDate("");
+        return;
+      case 'custom':
+        // For custom, keep existing dates
+        return;
       default:
-        setStartDate('');
-        setEndDate('');
-        break;
+        last365.setDate(last365.getDate() - 365);
     }
+
+    setStartDate(last365.toISOString().split('T')[0]);
+    setEndDate(today.toISOString().split('T')[0]);
+  }, [dateRange]); // Now depends on dateRange
+
+
+  // Update handleDateRangeChange to only set the dateRange state
+  const handleDateRangeChange = (range) => {
+    setDateRange(range);
+    // Don't set dates here, they'll be set by the useEffect above
   };
 
   // Enhanced color schemes
@@ -294,11 +1001,19 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const updateChartData = () => {
     const filtered = filterReports();
 
+    console.log('🔍 DEBUG updateChartData:');
+    console.log('Filtered reports count:', filtered.length);
+    console.log('POC Types:', pocTypes);
+    console.log('Date Range:', dateRange);
+    console.log('Start Date:', startDate);
+    console.log('End Date:', endDate);
+
     if (filtered.length === 0) {
+      console.log('No filtered data for chart');
       setChartData({
         labels: ['No Data Available'],
         datasets: [{
-          label: 'Number of POCs',
+          label: 'Number of Usecases',
           data: [0],
           backgroundColor: 'rgba(120, 120, 120, 0.6)',
           borderColor: 'rgba(120, 120, 120, 1)',
@@ -308,8 +1023,10 @@ const Report = ({ onNavigate, onLogout, user }) => {
       return;
     }
 
+    // Rest of your updateChartData function remains the same...
     const labels = pocTypes.length > 0 ? pocTypes : ['No Types Available'];
     const typeCounts = {};
+
     labels.forEach(type => {
       typeCounts[type] = filtered.filter(report => {
         const reportType = report.pocType || report.poc_type || 'Unknown';
@@ -317,85 +1034,118 @@ const Report = ({ onNavigate, onLogout, user }) => {
       }).length;
     });
 
+    console.log('Type counts after filtering:', typeCounts);
+
     const backgroundColors = getVibrantColors(labels.length);
 
     setChartData({
       labels: labels,
-      datasets: [
-        {
-          label: 'Number of Usecases',
-          data: Object.values(typeCounts),
-          backgroundColor: backgroundColors,
-          borderColor: backgroundColors.map(color => color.replace('0.9', '1')),
-          borderWidth: 3,
-          borderRadius: 12,
-          borderSkipped: false,
-          barPercentage: 0.7,
-          categoryPercentage: 0.8,
-        },
-      ],
+      datasets: [{
+        label: 'Number of Usecases',
+        data: Object.values(typeCounts),
+        backgroundColor: backgroundColors,
+        borderColor: backgroundColors.map(color => color.replace('0.9', '1')),
+        borderWidth: 3,
+        borderRadius: 12,
+        borderSkipped: false,
+        barPercentage: 0.7,
+        categoryPercentage: 0.8,
+      }],
     });
-
-    console.log('🔍 DEBUG updateChartData:');
-    console.log('Total filtered reports:', filtered.length);
-    console.log('Reports counted in chart:', Object.values(typeCounts).reduce((a, b) => a + b, 0));
-    console.log('Available pocTypes:', pocTypes);
-    console.log('Type counts:', typeCounts);
   };
 
   const updateStatusChartData = () => {
     const filtered = filterReports();
 
     if (filtered.length === 0) {
+      console.log('No filtered data for status chart');
       setStatusChartData({
         labels: ["No Data Available"],
-        datasets: [
-          {
-            label: "Number of Usecases",
-            data: [0],
-            backgroundColor: "rgba(120, 120, 120, 0.6)",
-            borderColor: "rgba(120, 120, 120, 1)",
-            borderWidth: 2,
-          },
-        ],
+        datasets: [{
+          label: "Number of Usecases",
+          data: [0],
+          backgroundColor: "rgba(120, 120, 120, 0.6)",
+          borderColor: "rgba(120, 120, 120, 1)",
+          borderWidth: 2,
+        }],
       });
       return;
     }
 
-    const labels = statusTypes.length > 0 ? statusTypes : ['No Status Available'];
+    // Get all unique statuses
+    const allStatuses = new Set();
+    filtered.forEach(r => {
+      if (r.status) allStatuses.add(r.status);
+    });
+
+    // Create labels - include all statuses
+    const labels = Array.from(allStatuses).filter(status => status).sort();
+
+    // Calculate counts for each status
     const statusCounts = {};
     labels.forEach(status => {
-      statusCounts[status] = filtered.filter(r => (r.status || "Unknown") === status).length;
+      statusCounts[status] = filtered.filter(r => r.status === status).length;
     });
+
+    // Calculate completed count that includes converted
+    const completedWithConverted = filtered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('completed') || status.includes('done') || status.includes('success');
+    }).length;
+
+    const convertedCount = filtered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('converted');
+    }).length;
+
+    // Update the Completed status count to include converted
+    const completedStatusLabel = labels.find(label =>
+      label.toLowerCase().includes('completed') ||
+      label.toLowerCase().includes('done') ||
+      label.toLowerCase().includes('success')
+    );
+
+    if (completedStatusLabel) {
+      // Set completed bar to show completed+converted count
+      statusCounts[completedStatusLabel] = completedWithConverted + convertedCount;
+    }
+
+    console.log('Status counts (Completed includes Converted):', statusCounts);
 
     const getStatusColor = (status) => {
       const statusLower = status?.toLowerCase();
       if (statusLower.includes('completed') || statusLower.includes('done') || statusLower.includes('success'))
-        return 'rgba(76, 175, 80, 0.9)';
+        return 'rgba(76, 175, 80, 0.9)'; // Green
+      if (statusLower.includes('converted'))
+        return 'rgba(156, 39, 176, 0.9)'; // Purple
       if (statusLower.includes('progress') || statusLower.includes('ongoing'))
-        return 'rgba(255, 152, 0, 0.9)';
-      if (statusLower.includes('pending') || statusLower.includes('waiting') || statusLower.includes('planned'))
-        return 'rgba(33, 150, 243, 0.9)';
+        return 'rgba(255, 152, 0, 0.9)'; // Orange - Make it darker for contrast
+      if (statusLower.includes('pending') || statusLower.includes('waiting') || statusLower.includes('awaiting') || statusLower.includes('planned'))
+        return 'rgba(33, 150, 243, 0.9)'; // Blue
+      if (statusLower.includes('draft'))
+        return 'rgba(255, 193, 7, 0.9)'; // Yellow - Make darker
+      if (statusLower.includes('dropped'))
+        return 'rgba(96, 125, 139, 0.9)'; // Blue Grey
+      if (statusLower.includes('hold'))
+        return 'rgba(255, 87, 34, 0.9)'; // Deep Orange
       if (statusLower.includes('cancel') || statusLower.includes('reject') || statusLower.includes('failed'))
-        return 'rgba(244, 67, 54, 0.9)';
-      return 'rgba(158, 158, 158, 0.9)';
+        return 'rgba(244, 67, 54, 0.9)'; // Red
+      return 'rgba(100, 100, 100, 0.9)'; // Darker grey for better contrast
     };
 
     setStatusChartData({
       labels: labels,
-      datasets: [
-        {
-          label: "Number of Usecases",
-          data: labels.map(status => statusCounts[status]),
-          backgroundColor: labels.map(status => getStatusColor(status)),
-          borderColor: labels.map(status => getStatusColor(status).replace('0.9', '1')),
-          borderWidth: 3,
-          borderRadius: 12,
-          borderSkipped: false,
-          barPercentage: 0.7,
-          categoryPercentage: 0.8,
-        },
-      ],
+      datasets: [{
+        label: "Number of Usecases",
+        data: labels.map(status => statusCounts[status]),
+        backgroundColor: labels.map(status => getStatusColor(status)),
+        borderColor: labels.map(status => getStatusColor(status).replace('0.9', '1')),
+        borderWidth: 3,
+        borderRadius: 12,
+        borderSkipped: false,
+        barPercentage: 0.7,
+        categoryPercentage: 0.8,
+      }],
     });
   };
 
@@ -417,7 +1167,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
     const labels = pocTypes.length > 0 ? pocTypes.slice(0, 6) : ['No Types'];
     const typeCounts = {};
-    const uncategorized = []; // 👈 track uncategorized
+    const uncategorized = [];
 
     labels.forEach(type => {
       typeCounts[type] = filtered.filter(report => {
@@ -433,7 +1183,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
     filtered.forEach(report => {
       const reportType = report.pocType || report.poc_type || 'Unknown';
       if (!labels.includes(reportType)) {
-        uncategorized.push(report); // 👈 collect uncategorized
+        uncategorized.push(report);
       }
     });
 
@@ -519,6 +1269,10 @@ const Report = ({ onNavigate, onLogout, user }) => {
     });
   };
 
+
+
+
+
   const updateClientTypePieChartData = () => {
     const filtered = filterReports();
 
@@ -547,6 +1301,10 @@ const Report = ({ onNavigate, onLogout, user }) => {
       }).length;
     });
 
+
+
+
+
     // Calculate "Others" if there are more than 5 client types
     let otherCount = 0;
     if (clientTypes.length > 5) {
@@ -570,43 +1328,83 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
   const updateOverdueUsecases = () => {
     const today = new Date();
-    const overdue = filterReports().filter(report => {
-      if (!report.excepted_end_date || report.status?.toLowerCase().includes('completed')) return false;
-      const endDate = new Date(report.excepted_end_date);
-      return endDate < today;
+    const filtered = filterReports(); // Uses only start_date now
+
+    const overdue = filtered.filter(report => {
+      // Changed: Consider overdue if start_date is in past and not completed
+      if (!report.start_date || report.status?.toLowerCase().includes('completed')) return false;
+      const startDate = new Date(report.start_date);
+      return startDate < today;
     });
+
     setOverdueUsecases(overdue);
   };
 
   const filterReports = () => {
-    return reports.filter(r => {
+    console.log('🔍 DEBUG filterReports called');
+    console.log('Start Date:', startDate);
+    console.log('End Date:', endDate);
+    console.log('Region Filter:', regionFilter);
+    console.log('POC Type Filter:', pocTypeFilter);
+    console.log('Total reports:', reports.length);
+
+    const filtered = reports.filter(r => {
       let matchesDate = true;
       let matchesRegion = true;
       let matchesPocType = true;
 
-      if (startDate || endDate) {
+      // DATE FILTERING - Apply date range logic
+      if (dateRange !== "all") {
         const reportStartDate = r.start_date ? new Date(r.start_date) : null;
-        const reportEndDate = r.excepted_end_date ? new Date(r.excepted_end_date) : null;
 
-        if (startDate && endDate) {
-          const filterStart = new Date(startDate);
-          const filterEnd = new Date(endDate);
-          matchesDate =
-            reportStartDate && reportStartDate >= filterStart &&
-            reportEndDate && reportEndDate <= filterEnd;
-        } else if (startDate) {
-          const filterStart = new Date(startDate);
-          matchesDate = reportStartDate && reportStartDate >= filterStart;
-        } else if (endDate) {
-          const filterEnd = new Date(endDate);
-          matchesDate = reportEndDate && reportEndDate <= filterEnd;
+        if (dateRange === "custom") {
+          // Custom date range
+          if (startDate && endDate) {
+            const filterStart = new Date(startDate);
+            const filterEnd = new Date(endDate);
+            filterEnd.setHours(23, 59, 59, 999); // End of day
+
+            if (reportStartDate) {
+              matchesDate = reportStartDate >= filterStart && reportStartDate <= filterEnd;
+            } else {
+              matchesDate = false; // No date, exclude
+            }
+          }
+        } else {
+          // Predefined date ranges
+          const today = new Date();
+          let filterStart = new Date();
+
+          switch (dateRange) {
+            case 'last30':
+              filterStart.setDate(today.getDate() - 30);
+              break;
+            case 'last90':
+              filterStart.setDate(today.getDate() - 90);
+              break;
+            case 'last180':
+              filterStart.setDate(today.getDate() - 180);
+              break;
+            case 'last365':
+              filterStart.setDate(today.getDate() - 365);
+              break;
+            default:
+              filterStart = null;
+          }
+
+          if (filterStart && reportStartDate) {
+            filterStart.setHours(0, 0, 0, 0); // Start of day
+            matchesDate = reportStartDate >= filterStart && reportStartDate <= today;
+          }
         }
       }
 
+      // REGION FILTER
       if (regionFilter) {
         matchesRegion = r.region === regionFilter;
       }
 
+      // POC TYPE FILTER
       if (pocTypeFilter) {
         const reportType = r.pocType || r.poc_type;
         matchesPocType = reportType === pocTypeFilter;
@@ -614,67 +1412,40 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
       return matchesDate && matchesRegion && matchesPocType;
     });
+
+    console.log('Filtered reports count:', filtered.length);
+    return filtered;
   };
 
-  // Enhanced chart options with better styling
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top',
-        labels: {
-          font: { size: 14, weight: 'bold' },
-          padding: 20,
-          usePointStyle: true,
-          pointStyle: 'circle'
-        }
-      },
-      title: {
-        display: true,
-        text: ' USECASES BY TYPE',
-        font: { size: 20, weight: 'bold' },
-        padding: { top: 10, bottom: 20 },
-        color: theme.palette.primary.main
-      },
-      tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        titleFont: { size: 14, weight: 'bold' },
-        bodyFont: { size: 13 },
-        padding: 12,
-        cornerRadius: 8,
-        usePointStyle: true,
-      }
-    },
-    scales: {
-      x: {
-        grid: {
-          display: true,
-          color: 'rgba(0, 0, 0, 0.05)'
-        },
-        ticks: {
-          font: { size: 12, weight: 'bold' },
-          maxRotation: 45
-        }
-      },
-      y: {
-        beginAtZero: true,
-        ticks: {
-          stepSize: 1,
-          font: { size: 12, weight: 'bold' }
-        },
-        grid: {
-          color: 'rgba(0, 0, 0, 0.08)',
-          drawBorder: false
-        }
-      }
-    },
-    animation: {
-      duration: 1500,
-      easing: 'easeOutQuart'
+  const filterForMonthlyChart = () => {
+    // First apply main filters
+    let filtered = filterReports();
+
+    // Apply monthly-specific usecase type filter
+    if (monthChartFilter !== "all") {
+      filtered = filtered.filter(report => {
+        const reportType = report.pocType || report.poc_type || 'Unknown';
+        return reportType === monthChartFilter;
+      });
     }
+
+    // Filter by month range (using start_date only)
+    if (monthRange > 0) {
+      const today = new Date();
+      const monthsAgo = new Date();
+      monthsAgo.setMonth(today.getMonth() - monthRange);
+
+      filtered = filtered.filter(report => {
+        if (!report.start_date) return false;
+        const reportDate = new Date(report.start_date);
+        return reportDate >= monthsAgo && reportDate <= today;
+      });
+    }
+
+    return filtered;
   };
+
+
 
   const statusChartOptions = {
     ...chartOptions,
@@ -683,8 +1454,126 @@ const Report = ({ onNavigate, onLogout, user }) => {
       title: {
         ...chartOptions.plugins.title,
         text: '🚀 USECASES BY STATUS'
+      },
+      datalabels: {
+        ...chartOptions.plugins.datalabels,
+        anchor: chartType === 'bar' ? 'end' : 'center',
+        align: chartType === 'bar' ? 'top' : 'center'
+      },
+      tooltip: {
+        ...chartOptions.plugins.tooltip,
+        callbacks: {
+          label: function (context) {
+            const label = context.dataset.label || '';
+            const value = context.parsed.y;
+            const status = context.label;
+            const statusLower = status?.toLowerCase() || '';
+
+            // Get filtered reports for calculations
+            const filtered = filterReports();
+
+            // Calculate actual counts for breakdown
+            const completedCount = filtered.filter(r => {
+              const rStatus = r.status?.toLowerCase() || '';
+              return (rStatus.includes('completed') || rStatus.includes('done') || rStatus.includes('success')) && !rStatus.includes('converted');
+            }).length;
+
+            const convertedCount = filtered.filter(r => {
+              const rStatus = r.status?.toLowerCase() || '';
+              return rStatus.includes('converted');
+            }).length;
+
+            // For Completed bar (which shows completed+converted)
+            if (statusLower.includes('completed') || statusLower.includes('done') || statusLower.includes('success')) {
+              return [
+                `📊 ${label}: ${value}`,
+                `   - Regular Completed: ${completedCount}`,
+                `   - Converted: ${convertedCount}`,
+                `💰 Total: ${completedCount + convertedCount}`
+              ];
+            }
+
+            // For Converted bar
+            if (statusLower.includes('converted')) {
+              const totalCompletedWithConverted = completedCount + convertedCount;
+              return [
+                `💹 ${label}: ${value}`,
+                `📈 Part of Completed Total: ${totalCompletedWithConverted}`
+              ];
+            }
+
+            return `${label}: ${value}`;
+          }
+        }
+      }
+    },
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        suggestedMax: function (context) {
+          const chart = context.chart;
+          const datasets = chart.data.datasets;
+          let maxValue = 0;
+
+          datasets.forEach(dataset => {
+            const datasetMax = Math.max(...dataset.data);
+            if (datasetMax > maxValue) maxValue = datasetMax;
+          });
+
+          if (maxValue === 0) return 1;
+          const extra = Math.max(1, Math.ceil(maxValue * 0.15));
+          return maxValue + extra;
+        }
       }
     }
+  };
+
+  // Replace the existing getPocFilteredCompletedCount function with this:
+  const getPocFilteredCompletedCount = () => {
+    if (!pocTypeFilter) {
+      // If no POC type filter is selected, return the full completed count
+      return completedIncludingConverted;
+    }
+
+    // Filter reports by POC type only
+    const pocFiltered = filteredReports.filter(report => {
+      const reportType = report.pocType || report.poc_type || '';
+      return reportType === pocTypeFilter;
+    });
+
+    // Calculate completed count for filtered POC type
+    const filteredCompleted = pocFiltered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('completed') || status.includes('done') || status.includes('success');
+    }).length;
+
+    const filteredConverted = pocFiltered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('converted');
+    }).length;
+
+    return filteredCompleted + filteredConverted;
+  };
+
+  // Add this new function to get filtered converted count:
+  const getPocFilteredConvertedCount = () => {
+    if (!pocTypeFilter) {
+      // If no POC type filter is selected, return the full converted count
+      return convertedPocs;
+    }
+
+    // Filter reports by POC type only
+    const pocFiltered = filteredReports.filter(report => {
+      const reportType = report.pocType || report.poc_type || '';
+      return reportType === pocTypeFilter;
+    });
+
+    // Calculate converted count for filtered POC type
+    return pocFiltered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('converted');
+    }).length;
   };
 
   const clientTypeChartOptions = {
@@ -694,8 +1583,49 @@ const Report = ({ onNavigate, onLogout, user }) => {
       title: {
         ...chartOptions.plugins.title,
         text: '🏢 USECASES BY CLIENT TYPE'
+      },
+      datalabels: {
+        ...chartOptions.plugins.datalabels,
+        anchor: chartType === 'bar' ? 'end' : 'center',
+        align: chartType === 'bar' ? 'top' : 'center'
+      }
+    },
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        suggestedMax: function (context) {
+          const chart = context.chart;
+          const datasets = chart.data.datasets;
+          let maxValue = 0;
+
+          datasets.forEach(dataset => {
+            const datasetMax = Math.max(...dataset.data);
+            if (datasetMax > maxValue) maxValue = datasetMax;
+          });
+
+          if (maxValue === 0) return 1;
+          const extra = Math.max(1, Math.ceil(maxValue * 0.1));
+          return maxValue + extra;
+        }
       }
     }
+  };
+
+
+  // Update the getPocFilteredConversionRate function to be more efficient:
+  const getPocFilteredConversionRate = () => {
+    if (!pocTypeFilter) {
+      // If no POC type filter, return the overall conversion rate
+      return conversionRate;
+    }
+
+    const filteredCompletedCount = getPocFilteredCompletedCount();
+    const filteredConvertedCount = getPocFilteredConvertedCount();
+
+    return filteredCompletedCount > 0
+      ? Math.round((filteredConvertedCount / filteredCompletedCount) * 100)
+      : 0;
   };
 
   const clientTypePieChartOptions = {
@@ -703,10 +1633,10 @@ const Report = ({ onNavigate, onLogout, user }) => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: false, // Hide legend to make space for larger chart
+        display: false,
       },
       title: {
-        display: false, // Hide title since we have it in the Paper component
+        display: false,
       },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -715,16 +1645,31 @@ const Report = ({ onNavigate, onLogout, user }) => {
         padding: 10,
         cornerRadius: 6,
         usePointStyle: true,
+      },
+      datalabels: {
+        display: true, // Ensure this is true
+        color: '#ffffff', // White for pie/doughnut
+        font: {
+          size: 11,
+          weight: 'bold'
+        },
+        formatter: function (value, context) {
+          if (value > 0) {
+            // Show both value and percentage
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = Math.round((value / total) * 100);
+            return `${value} (${percentage}%)`;
+          }
+          return '';
+        }
       }
     },
-    // Increase the chart radius
     elements: {
       arc: {
         borderWidth: 2,
         borderColor: '#ffffff',
       }
     },
-    // Adjust layout to use more space
     layout: {
       padding: {
         top: 10,
@@ -739,6 +1684,69 @@ const Report = ({ onNavigate, onLogout, user }) => {
     }
   };
 
+  const monthlyChartOptions = {
+    ...chartOptions,
+    plugins: {
+      ...chartOptions.plugins,
+      title: {
+        ...chartOptions.plugins.title,
+        text: dateRange === 'all'
+          ? '📅 USECASES BY MONTH (Last 12 Months)'
+          : `📅 USECASES BY MONTH (${dateRange === 'last30' ? 'Last 30 Days' :
+            dateRange === 'last90' ? 'Last 90 Days' :
+              dateRange === 'last180' ? 'Last 6 Months' :
+                dateRange === 'last365' ? 'Last 1 Year' :
+                  'Custom Date Range'})`
+      },
+      datalabels: {
+        ...chartOptions.plugins.datalabels,
+        color: chartType === 'bar' ? '#333333' : '#ffffff',
+        font: {
+          size: 12,
+          weight: 'bold'
+        },
+        formatter: function (value, context) {
+          return value > 0 ? value : '';
+        },
+        anchor: chartType === 'bar' ? 'end' : 'center',
+        align: chartType === 'bar' ? 'top' : 'center'
+      }
+    },
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        suggestedMax: function (context) {
+          const chart = context.chart;
+          const datasets = chart.data.datasets;
+          let maxValue = 0;
+
+          datasets.forEach(dataset => {
+            const datasetMax = Math.max(...dataset.data);
+            if (datasetMax > maxValue) maxValue = datasetMax;
+          });
+
+          if (maxValue === 0) return 1;
+          const extra = Math.max(1, Math.ceil(maxValue * 0.2)); // 20% extra for monthly chart
+          return maxValue + extra;
+        },
+        ticks: {
+          stepSize: function (context) {
+            const chart = context.chart;
+            const max = chart.scales.y.max;
+            // Dynamic step size based on max value
+            if (max <= 5) return 1;
+            if (max <= 10) return 2;
+            if (max <= 20) return 5;
+            return Math.ceil(max / 10);
+          },
+          font: { size: 12, weight: 'bold' },
+          precision: 0
+        }
+      }
+    }
+  };
+
   const clearFilters = () => {
     setStartDate("");
     setEndDate("");
@@ -747,30 +1755,282 @@ const Report = ({ onNavigate, onLogout, user }) => {
     setDateRange("all");
   };
 
+
   const refreshData = () => {
     fetchInitialData();
   };
 
   const filteredReports = filterReports();
   const totalPocs = filteredReports.length;
-  const completedPocs = filteredReports.filter(r =>
-    r.status?.toLowerCase().includes('completed') || r.status?.toLowerCase().includes('done')
-  ).length;
-  const inProgressPocs = filteredReports.filter(r =>
-    r.status?.toLowerCase().includes('progress') || r.status?.toLowerCase().includes('ongoing')
-  ).length;
+
+  const completedPocs = filteredReports.filter(r => {
+    const status = r.status?.toLowerCase() || '';
+    return status.includes('completed') || status.includes('done') || status.includes('success');
+  }).length;
+
+  const inProgressPocs = filteredReports.filter(r => {
+    const status = r.status?.toLowerCase() || '';
+    return status.includes('progress') || status.includes('ongoing');
+  }).length;
+
   const overdueCount = overdueUsecases.length;
 
-  const renderChart = (data, options, title) => {
-    switch (chartType) {
-      case 'doughnut':
-        return <Doughnut data={data} options={options} />;
-      case 'line':
-        return <Line data={data} options={options} />;
-      default:
-        return <Bar data={data} options={options} />;
+  const convertedPocs = filteredReports.filter(r => {
+    const status = r.status?.toLowerCase() || '';
+    return status.includes('converted');
+  }).length;
+
+  // Updated completed count that includes converted
+  const completedIncludingConverted = completedPocs + convertedPocs;
+
+  // Calculate conversion rate based on updated completed count
+  const conversionRate = completedIncludingConverted > 0
+    ? Math.round((convertedPocs / completedIncludingConverted) * 100)
+    : 0;
+
+  // Add this function before the return statement
+  const getTotalLabelsPlugin = {
+    id: 'totalLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx, data, scales } = chart;
+
+      ctx.save();
+      ctx.font = 'bold 14px Arial';
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+
+      // Get the y-axis scale
+      const yScale = scales.y;
+
+      data.datasets[0].data.forEach((_, index) => {
+        // Calculate total for this index (sales person)
+        const total = data.datasets.reduce((sum, dataset) => sum + dataset.data[index], 0);
+
+        if (total > 0) {
+          const meta = chart.getDatasetMeta(0);
+          const point = meta.data[index];
+
+          if (point) {
+            // Get the pixel position for the top of the bar
+            const barTopPixel = yScale.getPixelForValue(total);
+
+            // Position the total label 25px above the bar top
+            const x = point.x;
+            const y = barTopPixel - 25; // 25px above the bar top
+
+            // Draw the total text with shadow for visibility
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(total.toString(), x, y);
+            ctx.shadowBlur = 0;
+          }
+        }
+      });
+
+      ctx.restore();
     }
   };
+
+  // Add this plugin definition BEFORE the Report component
+  const TotalLabelsPlugin = {
+    id: 'totalLabels',
+    afterDatasetsDraw(chart, args, options) {
+      const { ctx, data, scales } = chart;
+
+      // Only apply to stacked bar charts
+      if (!chart.options.scales?.x?.stacked || !chart.options.plugins?.totalLabels?.display) {
+        return;
+      }
+
+      ctx.save();
+
+      // Get plugin options
+      const pluginOptions = chart.options.plugins.totalLabels || {};
+      const color = pluginOptions.color || '#333333';
+      const fontSize = pluginOptions.fontSize || 14;
+      const fontWeight = pluginOptions.fontWeight || 'bold';
+      const padding = pluginOptions.padding || 20;
+
+      ctx.font = `${fontWeight} ${fontSize}px Arial`;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+
+      // Get the y-axis scale
+      const yScale = scales.y;
+
+      // Calculate totals for each bar (excluding any hidden/total datasets)
+      const totals = [];
+      const barCount = data.datasets[0]?.data?.length || 0;
+
+      for (let i = 0; i < barCount; i++) {
+        let total = 0;
+        // Sum only the visible status datasets (exclude the last dataset if it's for totals)
+        const visibleDatasets = data.datasets.filter((ds, idx) =>
+          ds.backgroundColor !== 'transparent' &&
+          ds.borderColor !== 'transparent'
+        );
+
+        visibleDatasets.forEach(dataset => {
+          total += dataset.data[i] || 0;
+        });
+        totals.push(total);
+      }
+
+      // Draw total labels for each bar
+      totals.forEach((total, index) => {
+        if (total > 0) {
+          const meta = chart.getDatasetMeta(0);
+          const bar = meta.data[index];
+
+          if (bar) {
+            // Get the pixel position for the top of the stacked bar
+            const barTopPixel = yScale.getPixelForValue(total);
+
+            // Position the total label with gap above the bar
+            const x = bar.x;
+            const y = barTopPixel - padding; // Gap from top of bar
+
+            // Draw the total text with shadow for better visibility
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            ctx.shadowBlur = 3;
+            ctx.fillText(total.toString(), x, y);
+            ctx.shadowBlur = 0;
+          }
+        }
+      });
+
+      ctx.restore();
+    }
+  };
+
+  // Register the plugin with ChartJS
+  ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+    LineElement,
+    PointElement,
+    ChartDataLabels,
+    TotalLabelsPlugin  // Add this line
+  );
+
+
+  // Add this function before the renderChart function
+  const createSalesPersonChartWithTotals = () => {
+    if (!salesPersonChartData) return null;
+
+    // Clone the original data
+    const chartData = { ...salesPersonChartData };
+
+    // Remove any previously added "Total" dataset
+    chartData.datasets = chartData.datasets.filter(ds =>
+      ds.label !== 'Total' && ds.backgroundColor !== 'transparent'
+    );
+
+    return chartData;
+  };
+
+  // Update the renderChart function to ensure proper options
+  const renderChart = (data, options) => {
+    if (!data || !data.labels || data.labels.length === 0) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+          <Typography variant="h5" color="text.secondary">
+            📊 No data available
+          </Typography>
+        </Box>
+      );
+    }
+
+    // Check if this is a stacked bar chart (Sales Person chart)
+    const isStackedBar = options.scales?.x?.stacked === true;
+
+    // Clone options and ensure datalabels are enabled
+    const finalOptions = {
+      ...options,
+      plugins: {
+        ...options.plugins,
+        datalabels: {
+          ...(options.plugins?.datalabels || {}),
+          display: true,
+        }
+      }
+    };
+
+    // For stacked bar charts (sales person chart), use special configuration
+    if (isStackedBar) {
+      finalOptions.plugins.datalabels = {
+        ...finalOptions.plugins.datalabels,
+        display: true,
+        color: function (context) {
+          // Dynamic color based on background brightness
+          const backgroundColor = context.dataset.backgroundColor;
+          if (Array.isArray(backgroundColor)) {
+            const color = backgroundColor[context.dataIndex];
+            if (color && color.includes('rgba')) {
+              const rgb = color.match(/\d+/g);
+              if (rgb && rgb.length >= 3) {
+                const r = parseInt(rgb[0]);
+                const g = parseInt(rgb[1]);
+                const b = parseInt(rgb[2]);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                return brightness > 125 ? '#333333' : '#ffffff';
+              }
+            }
+          }
+          return '#ffffff';
+        },
+        font: {
+          size: 10,
+          weight: 'bold'
+        },
+        anchor: 'center',
+        align: 'center',
+        offset: 0,
+        clip: false,
+        padding: 4,
+        formatter: function (value) {
+          return value > 0 ? value : '';
+        }
+      };
+    }
+
+    // Rest of your renderChart function remains the same...
+    switch (chartType) {
+      case 'doughnut':
+      case 'pie':
+      // ... pie/doughnut chart code
+      case 'line':
+      // ... line chart code
+      default:
+        // For regular bar charts
+        if (!isStackedBar) {
+          finalOptions.plugins.datalabels = {
+            ...finalOptions.plugins.datalabels,
+            anchor: 'end',
+            align: 'top',
+            offset: 15,
+            clip: false,
+            color: '#333333',
+            font: {
+              size: 12,
+              weight: 'bold'
+            },
+            formatter: function (value) {
+              return value > 0 ? value : '';
+            }
+          };
+        }
+        return <Bar data={data} options={finalOptions} />;
+    }
+  };
+
 
   return (
     <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: '#f8fafc' }}>
@@ -779,15 +2039,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
       }}>
         <Toolbar>
-          {/* <IconButton
-            edge="start"
-            color="inherit"
-            aria-label="menu"
-            onClick={() => onNavigate('dashboard')}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton> */}
 
           <Button
             color="inherit"
@@ -798,7 +2049,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
             Dashboard
           </Button>
 
-          <AnalyticsIcon sx={{ mr: 2, fontSize: 30 }} />
+          {/* <AnalyticsIcon sx={{ mr: 2, fontSize: 30 }} /> */}
           <Typography
             variant="h5"
             component="h1"
@@ -809,8 +2060,52 @@ const Report = ({ onNavigate, onLogout, user }) => {
               fontFamily: 'Arial, sans-serif'
             }}
           >
-            🚀 Usecases Analytics Dashboard
+            🚀 Usecases Dashboard
           </Typography>
+
+          {/* Add Report buttons here */}
+          <Button
+            color="inherit"
+            onClick={() => {
+              setPocTypeFilter(""); // Clear dropdown
+              setDateRange("last365");
+              setRegionFilter("");
+              setStartDate("");
+              setEndDate("");
+              setSalesReportActive(false);
+            }}
+            variant="outlined"
+            startIcon={<span>📊</span>}
+            sx={{
+              mr: 1,
+              borderColor: 'rgba(255,255,255,0.3)',
+              fontWeight: 'bold'
+            }}
+          >
+            All Usecase Report
+          </Button>
+
+          <Button
+            color="inherit"
+            onClick={() => {
+              setPocTypeFilter("POC"); // Set dropdown to "POC"
+              setSalesReportActive(true);
+              setDateRange("last365");
+              setRegionFilter("");
+              setStartDate("");
+              setEndDate("");
+            }}
+            variant="outlined"
+            startIcon={<span>💰</span>}
+            sx={{
+              mr: 1,
+              borderColor: 'rgba(255,255,255,0.3)',
+              fontWeight: 'bold'
+            }}
+          >
+            Sales Report
+          </Button>
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
 
             <Chip
@@ -847,10 +2142,10 @@ const Report = ({ onNavigate, onLogout, user }) => {
           <Grid item xs={12} sm={6} md={3}>
             <StatCard
               title="Completed"
-              value={completedPocs}
+              value={completedIncludingConverted}
               icon={<CheckCircleIcon sx={{ fontSize: 30 }} />}
               color="#32a852"
-              subtitle={`${totalPocs ? Math.round((completedPocs / totalPocs) * 100) : 0}% success rate`}
+              subtitle={`${conversionRate}% conversion rate`}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
@@ -862,6 +2157,23 @@ const Report = ({ onNavigate, onLogout, user }) => {
               subtitle="Active development"
             />
           </Grid>
+
+
+          {pocTypeFilter === "POC" && (
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                title="Converted"
+                value={getPocFilteredConvertedCount()}
+                icon={<MonetizationOnIcon sx={{ fontSize: 30 }} />}
+                color="#9c27b0"
+                subtitle={
+                  `Of ${getPocFilteredCompletedCount()} completed\n` +
+                  `${getPocFilteredConversionRate()}% conversion rate`
+                }
+              />
+            </Grid>
+          )}
+
 
           {/* 4th card with pie chart - similar style to first 3 cards */}
           <Grid item xs={12} sm={6} md={3}>
@@ -931,162 +2243,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
           </Grid>
         </Grid>
 
-        {/* Rest of your existing code remains the same... */}
-        {/* Enhanced Filters Section */}
-        <Paper elevation={4} sx={{ p: 3, mb: 4, borderRadius: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
-          <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 3, alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" sx={{ minWidth: 200, fontWeight: 'bold', color: 'primary.main' }}>
-              🎛️ Filter Analytics
-            </Typography>
-
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {['all', 'last30', 'last90', 'last365', 'custom'].map((range) => (
-                <Chip
-                  key={range}
-                  label={
-                    range === 'all' ? '📅 All Time' :
-                      range === 'last30' ? '🔥 Last 30 Days' :
-                        range === 'last90' ? '🚀 Last 90 Days' :
-                          range === 'last365' ? '📊 Last 1 Year' : '⚙️ Custom Date'
-                  }
-                  onClick={() => handleDateRangeChange(range)}
-                  color={dateRange === range ? 'primary' : 'default'}
-                  variant={dateRange === range ? 'filled' : 'outlined'}
-                  sx={{ fontWeight: 'bold' }}
-                />
-              ))}
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: 'auto' }}>
-              <Button
-                variant="contained"
-                startIcon={<RefreshIcon />}
-                onClick={refreshData}
-                size="medium"
-                sx={{ fontWeight: 'bold' }}
-              >
-                Refresh
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<ClearIcon />}
-                onClick={clearFilters}
-                size="medium"
-                sx={{ fontWeight: 'bold' }}
-              >
-                Clear All
-              </Button>
-            </Box>
-          </Box>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                label="📅 Start Date"
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setDateRange("custom");
-                }}
-                InputLabelProps={{ shrink: true }}
-                disabled={dateRange !== "custom"}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                label="📅 End Date"
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setDateRange("custom");
-                }}
-                InputLabelProps={{ shrink: true }}
-                disabled={dateRange !== "custom"}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                select
-                label="🌍 Filter by Region"
-                value={regionFilter}
-                sx={{ minWidth: 220 }}
-                onChange={(e) => setRegionFilter(e.target.value)}
-              >
-                <MenuItem value="">All Regions</MenuItem>
-                {getRegions().map((region) => (
-                  <MenuItem key={region} value={region}>
-                    {region}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-          </Grid>
-
-          {error && (
-            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontWeight: 'bold' }}>
-              ⚠️ {error}
-            </Alert>
-          )}
-        </Paper>
-
-        {/* Additional Usecase Type Filter - Added after first graph */}
-        <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
-            🎯 Additional Usecase Type Filter
-          </Typography>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                select
-                label="🔍 Filter by Specific Usecase Type"
-                value={pocTypeFilter}
-                onChange={(e) => setPocTypeFilter(e.target.value)}
-                sx={{ minWidth: 220 }}
-              >
-                <MenuItem value="">All Usecase Types</MenuItem>
-                {pocTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip
-                  label={`📊 Total Filtered: ${filteredReports.length}`}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ fontWeight: 'bold' }}
-                />
-                <Chip
-                  label={`✅ Completed: ${completedPocs}`}
-                  color="success"
-                  variant="outlined"
-                  sx={{ fontWeight: 'bold' }}
-                />
-                <Chip
-                  label={`🔄 In Progress: ${inProgressPocs}`}
-                  color="warning"
-                  variant="outlined"
-                  sx={{ fontWeight: 'bold' }}
-                />
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-        <br />
-
         {/* Chart Type Selector */}
         <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1107,74 +2263,312 @@ const Report = ({ onNavigate, onLogout, user }) => {
           </Box>
         </Paper>
 
-        {/* Enhanced Charts Section - Vertical Layout */}
+        {/* Additional Usecase Type Filter - Added after first graph */}
+        <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
+            🎯 Additional Usecase Type Filter
+          </Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                select
+                label="🔍 Filter by Specific Usecase Type"
+                value={pocTypeFilter}
+                onChange={(e) => setPocTypeFilter(e.target.value)}
+                sx={{ minWidth: 220 }}
+              // REMOVED: disabled={salesReportActive}
+              >
+                <MenuItem value="">All Usecase Types</MenuItem>
+                {pocTypes.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label={`📊 Total Filtered: ${filteredReports.length}`}
+                  color="primary"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={`✅ Completed: ${completedIncludingConverted}`}
+                  color="success"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={`🔄 In Progress: ${inProgressPocs}`}
+                  color="warning"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+        <br />
+
+        {/* Enhanced Filters Section */}
+        <Paper elevation={4} sx={{ p: 3, mb: 4, borderRadius: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
+          {/* Title and Action Buttons in One Line */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+              🎛️ Filter Analytics
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<RefreshIcon />}
+                onClick={refreshData}
+                size="medium"
+                sx={{ fontWeight: 'bold', minWidth: 120 }}
+              >
+                Refresh
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ClearIcon />}
+                onClick={clearFilters}
+                size="medium"
+                sx={{ fontWeight: 'bold', minWidth: 120 }}
+              >
+                Clear All
+              </Button>
+            </Box>
+          </Box>
+
+          {/* Date Range Filter Chips */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'text.secondary' }}>
+              📅 Date Range:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {['all', 'last30', 'last90', 'last180', 'last365', 'custom'].map((range) => (
+                <Chip
+                  key={range}
+                  label={
+                    range === 'all' ? 'All Time' :
+                      range === 'last30' ? 'Last 30 Days' :
+                        range === 'last90' ? 'Last 90 Days' :
+                          range === 'last180' ? 'Last 6 Months' :
+                            range === 'last365' ? 'Last 1 Year' : 'Custom Date'
+                  }
+                  onClick={() => handleDateRangeChange(range)}
+                  color={dateRange === range ? 'primary' : 'default'}
+                  variant={dateRange === range ? 'filled' : 'outlined'}
+                  sx={{ fontWeight: 'bold' }}
+                />
+              ))}
+            </Box>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Filter Inputs */}
+          <Grid container spacing={2}>
+            {/* Date Inputs */}
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                label="Start Date"
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setDateRange("custom");
+                }}
+                InputLabelProps={{ shrink: true }}
+                disabled={dateRange !== "custom"}
+                size="small"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                label="End Date"
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setDateRange("custom");
+                }}
+                InputLabelProps={{ shrink: true }}
+                disabled={dateRange !== "custom"}
+                size="small"
+              />
+            </Grid>
+          </Grid>
+
+          {error && (
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontWeight: 'bold' }}>
+              ⚠️ {error}
+            </Alert>
+          )}
+        </Paper>
+
+
+        <br />
+
+
+
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress size={80} sx={{ color: 'primary.main' }} />
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {/* First Row: Main Chart */}
-            <Paper elevation={4} sx={{
-              p: 3,
-              borderRadius: 3,
-              height: '500px',
-              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-              border: '2px solid',
-              borderColor: 'primary.light'
-            }}>
-              {chartData ? (
-                renderChart(chartData, chartOptions)
-              ) : (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                  <Typography variant="h5" color="text.secondary">
-                    📊 No chart data available
-                  </Typography>
-                </Box>
-              )}
-            </Paper>
+            {/* Show ALL charts when NOT in Sales Report mode */}
+            {!salesReportActive && (
+              <>
+                {/* ALWAYS SHOW: Monthly Trend Chart */}
+                <Paper elevation={4} sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  height: '500px',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  border: '2px solid',
+                  borderColor: 'secondary.light'
+                }}>
+                  {monthlyChartData ? (
+                    renderChart(monthlyChartData, monthlyChartOptions)
+                  ) : (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                      <Typography variant="h5" color="text.secondary">
+                        📅 No monthly data available
+                      </Typography>
+                    </Box>
+                  )}
+                </Paper>
 
-            {/* USECASES BY STATUS - Full Width Chart */}
-            <Paper elevation={4} sx={{
-              p: 3,
-              borderRadius: 3,
-              height: '500px',
-              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-              border: '2px solid',
-              borderColor: 'success.light',
-              width: '100%'
-            }}>
-              {statusChartData ? (
-                renderChart(statusChartData, statusChartOptions)
-              ) : (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                  <Typography variant="h5" color="text.secondary">
-                    🎯 No status data available
-                  </Typography>
-                </Box>
-              )}
-            </Paper>
+                {/* Main Chart (Usecases by Type) */}
+                <Paper elevation={4} sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  height: '500px',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  border: '2px solid',
+                  borderColor: 'primary.light'
+                }}>
+                  {chartData ? (
+                    renderChart(chartData, chartOptions)
+                  ) : (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                      <Typography variant="h5" color="text.secondary">
+                        📊 No chart data available
+                      </Typography>
+                    </Box>
+                  )}
+                </Paper>
 
-            {/* USECASES BY CLIENT TYPE - Full Width Chart */}
-            <Paper elevation={4} sx={{
-              p: 3,
-              borderRadius: 3,
-              height: '500px',
-              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-              border: '2px solid',
-              borderColor: 'info.light',
-              width: '100%'
-            }}>
-              {clientTypeChartData ? (
-                renderChart(clientTypeChartData, clientTypeChartOptions)
-              ) : (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                  <Typography variant="h5" color="text.secondary">
-                    🏢 No client type data available
+                {/* USECASES BY STATUS */}
+                <Paper elevation={4} sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  height: '500px',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  border: '2px solid',
+                  borderColor: 'success.light',
+                  width: '100%'
+                }}>
+                  {statusChartData ? (
+                    renderChart(statusChartData, statusChartOptions)
+                  ) : (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                      <Typography variant="h5" color="text.secondary">
+                        🎯 No status data available
+                      </Typography>
+                    </Box>
+                  )}
+                </Paper>
+
+                {/* USECASES BY CLIENT TYPE */}
+                <Paper elevation={4} sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  height: '500px',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  border: '2px solid',
+                  borderColor: 'info.light',
+                  width: '100%'
+                }}>
+                  {clientTypeChartData ? (
+                    renderChart(clientTypeChartData, clientTypeChartOptions)
+                  ) : (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                      <Typography variant="h5" color="text.secondary">
+                        🏢 No client type data available
+                      </Typography>
+                    </Box>
+                  )}
+                </Paper>
+              </>
+            )}
+
+            {/* When Sales Report is active, show ONLY these two charts */}
+            {salesReportActive && (
+              <>
+
+                {/* 1. Usecases by Sales Person (Status-wise) in Sales Report */}
+                <Paper elevation={4} sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  height: '600px',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  border: '2px solid',
+                  borderColor: 'warning.light',
+                  width: '100%'
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1, color: 'orange.800' }}>
+                    👤 Usecases by Sales Person (Status-wise)
                   </Typography>
-                </Box>
-              )}
-            </Paper>
+                  {salesPersonChartData ? (
+                    <Bar
+                      data={createSalesPersonChartWithTotals()}
+                      options={salesPersonChartOptions}
+                    />
+                  ) : (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                      <Typography variant="h5" color="text.secondary">
+                        👤 No sales person data available
+                      </Typography>
+                    </Box>
+                  )}
+                </Paper>
+
+                {/* 2. POC CONVERSION BY SALES PERSON */}
+                {pocConversionChartData && (
+                  <Paper elevation={4} sx={{
+                    p: 3,
+                    borderRadius: 3,
+                    height: '600px',
+                    background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                    border: '2px solid',
+                    borderColor: 'warning.main',
+                    width: '100%'
+                  }}>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
+                      🎯 {pocTypeFilter || "ALL"} CONVERSION BY SALES PERSON
+                    </Typography>
+                    {pocConversionChartData && pocConversionChartData.labels && pocConversionChartData.labels.length > 0 ? (
+                      renderChart(pocConversionChartData, pocConversionChartOptions)
+                    ) : (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                        <Typography variant="h5" color="text.secondary">
+                          📊 No POC conversion data available
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
+                )}
+              </>
+            )}
           </Box>
         )}
       </Box>

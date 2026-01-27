@@ -1,9 +1,9 @@
+// src/components/PocPrjIdEdit.jsx
 import React, { useState, useEffect } from 'react';
-import Dropdown from './DropDown';
-import TextInput from './TextInput';
-
-import './PocPrjId.css';
-import companyLogo from '../components/Images/companyLogo.png';
+import Dropdown from '../DropDown';
+import TextInput from '../TextInput';
+import '../PocPrjId.css';
+import companyLogo from '../../components/Images/companyLogo.png';
 import axios from 'axios';
 import Button from '@mui/material/Button';
 
@@ -57,30 +57,41 @@ import {
     Remove as RemoveIcon
 } from '@mui/icons-material';
 
-const PocPrjId = ({ onClose, onSuccess, onBack }) => {
-    // Form states
-    const [idPrefix, setIdPrefix] = useState('');
-    const [pocId, setPocId] = useState('');
-    const [pocName, setPocName] = useState('');
-    const [entityType, setEntityType] = useState('');
-    const [entityName, setEntityName] = useState('');
-    const [partnerName, setPartnerName] = useState(''); // New state for partner name
-    const [salesPerson, setSalesPerson] = useState('');
-    const [description, setDescription] = useState('');
-    const [assignedTo, setAssignedTo] = useState([]);
-    const [createdBy, setCreatedBy] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    const [remark, setRemark] = useState('');
-    const [region, setRegion] = useState('');
-    const [isBillable, setIsBillable] = useState('');
-    const [pocType, setPocType] = useState('');
-    const [spocEmail, setSpocEmail] = useState('');
-    const [spocDesignation, setSpocDesignation] = useState('');
-    const [tags, setTags] = useState([]);
+const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
+    // Form states - pre-populate with the selected POC's data
+    const [idPrefix, setIdPrefix] = useState('POC');
+    const [pocId, setPocId] = useState(
+        typeof poc?.pocId === 'number' ? poc.pocId : null
+    );
+
+    const [pocName, setPocName] = useState(poc?.pocName || '');
+    const [entityType, setEntityType] = useState(poc?.entityType || '');
+    const [entityName, setEntityName] = useState(poc?.entityName || '');
+    const [partnerName, setPartnerName] = useState(poc?.partnerName || '');
+    const [salesPerson, setSalesPerson] = useState(poc?.salesPerson || '');
+    const [description, setDescription] = useState(poc?.description || '');
+    const [assignedTo, setAssignedTo] = useState(poc?.assignedTo ? poc.assignedTo.split(',') : []);
+    const [createdBy, setCreatedBy] = useState(poc?.createdBy || '');
+    const [startDate, setStartDate] = useState(poc?.startDate ? poc.startDate.split('T')[0] : '');
+    const [endDate, setEndDate] = useState(poc?.endDate ? poc.endDate.split('T')[0] : '');
+    const [actualStartDate, setActualStartDate] = useState(poc?.actualStartDate ? poc.actualStartDate.split('T')[0] : '');
+    const [actualEndDate, setActualEndDate] = useState(poc?.actualEndDate ? poc.actualEndDate.split('T')[0] : '');
+    const [estimatedEfforts, setEstimatedEfforts] = useState(poc?.estimatedEfforts || '');
+    const [totalEfforts, setTotalEfforts] = useState(poc?.totalEfforts || '');
+
+    const [approvedBy, setApprovedBy] = useState(poc?.approvedBy || '');
+    const [remark, setRemark] = useState(poc?.remark || '');
+    const [region, setRegion] = useState(poc?.region || '');
+
+
+
+    const [pocType, setPocType] = useState(poc?.pocType || '');
+    const [spocEmail, setSpocEmail] = useState(poc?.spocEmail || '');
+    const [spocDesignation, setSpocDesignation] = useState(poc?.spocDesignation || '');
+    const [tags, setTags] = useState(poc?.tags ? poc.tags.split(',') : []);
+    const [status, setStatus] = useState(poc?.status || 'Draft');
     const [loading, setLoading] = useState(false);
     const [apiLoading, setApiLoading] = useState(true);
-    const [idLoading, setIdLoading] = useState(false);
 
     // Multi-user selection dialog
     const [userDialogOpen, setUserDialogOpen] = useState(false);
@@ -92,12 +103,71 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     const [users, setUsers] = useState([]);
     const [createdByOptions, setCreatedByOptions] = useState([]);
     const [tagOptions, setTagOptions] = useState([]);
+    const [approverOptions, setApproverOptions] = useState([]);
 
     // Error states
     const [errors, setErrors] = useState({});
 
     // Form steps
     const [activeStep, setActiveStep] = useState(0);
+
+    const logoutInProgress = React.useRef(false);
+
+    const isTokenExpired = (token) => {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    };
+
+    const handleLogout = React.useCallback(async () => {
+        try {
+            await axios.post(
+                `${import.meta.env.VITE_API}/poc/api/auth/logout`,
+                {},
+                { withCredentials: true }
+            );
+        } catch (e) {
+            console.error('Logout error:', e);
+        } finally {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            window.location.href = '/usecase/login';
+        }
+    }, []);
+
+    const handleAutoLogout = React.useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
+        handleLogout();
+    }, [handleLogout]);
+
+    const safeAction = React.useCallback((action) => {
+        const token = localStorage.getItem('authToken');
+
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+        action();
+    }, [handleAutoLogout]);
+
+
+
+
+
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+        }
+    }, [handleAutoLogout]);
+
 
     // ID prefix options
     const idPrefixOptions = [
@@ -146,15 +216,39 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     };
 
     // Function to process API response data into dropdown options
-    const processApiData = (data) => {
+    const processApiData = (data, dataType = 'default') => {
         if (!data) return [];
 
         let processedData = [];
 
         if (Array.isArray(data)) {
-            processedData = data.map(item => extractName(item)).filter(name => name);
+            processedData = data.map(item => {
+                // Handle approver data structure
+                if (dataType === 'approvers' && typeof item === 'object') {
+                    return item.name || item.full_name || item.email ||
+                        `${item.firstName || ''} ${item.lastName || ''}`.trim() ||
+                        Object.values(item).find(val => typeof val === 'string') || '';
+                }
+
+                // Handle other data structures
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object' && item !== null) {
+                    return item.full_name || item.name || item.fullName || item.emp_name || item.email ||
+                        `${item.firstName || ''} ${item.lastName || ''}`.trim() ||
+                        Object.values(item).find(val => typeof val === 'string') || '';
+                }
+                return String(item);
+            }).filter(name => name);
         } else if (typeof data === 'object') {
-            if (data.data && Array.isArray(data.data)) {
+            // Specific handling for approvers
+            if (dataType === 'approvers' && Array.isArray(data.approvers)) {
+                processedData = data.approvers.map(item => extractName(item)).filter(name => name);
+            } else if (dataType === 'approvers') {
+                // Extract from object values
+                processedData = Object.values(data)
+                    .map(item => extractName(item))
+                    .filter(name => name);
+            } else if (data.data && Array.isArray(data.data)) {
                 processedData = data.data.map(item => extractName(item)).filter(name => name);
             } else if (data.users && Array.isArray(data.users)) {
                 processedData = data.users.map(item => extractName(item)).filter(name => name);
@@ -177,50 +271,80 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
         return processedData;
     };
-
     // Load dropdown data from APIs
     useEffect(() => {
         const fetchDropdownData = async () => {
+            const token = localStorage.getItem('authToken');
+
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             try {
                 setApiLoading(true);
                 const token = localStorage.getItem('authToken');
                 const emp_name = getemp_name();
-
+                const storedUser = JSON.parse(localStorage.getItem('user'));
+                const departmentName = storedUser?.department_name;
                 // Fetch sales persons from API
                 try {
-                    const salesResponse = await axios.get('http://localhost:5050/poc/getAllSalesPerson', {
+                    const token = localStorage.getItem('authToken');
+
+                    if (!token || isTokenExpired(token)) {
+                        handleAutoLogout();
+                        return;
+                    }
+
+                    const salesResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllSalesPerson`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
                     });
 
                     const salesData = processApiData(salesResponse.data);
-                    console.log(salesData)
-                    setSalesPersons(salesData.length > 0 ? salesData : []);
+                    setSalesPersons(salesData.length > 0 ? salesData : ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
                 } catch (salesError) {
                     console.error('Error fetching sales persons:', salesError);
-                    setSalesPersons([]);
+                    setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
                 }
 
-                // In fetchDropdownData function, update the assignTo API call:
+                // Fetch Assigned To options from API
                 try {
-                    const assignToResponse = await axios.get('http://localhost:5050/poc/getAllAssignTo', {
+                    const token = localStorage.getItem('authToken');
+
+                    if (!token || isTokenExpired(token)) {
+                        handleAutoLogout();
+                        return;
+                    }
+
+                    const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/sales/getAllAssignTo`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
+                        },
+
+                        params: {
+                            department_name: departmentName
                         }
                     });
-
-                    // Store the raw response data (array of objects with name and email)
-                    setUsers(assignToResponse.data || []);
+                    const assignToData = processApiData(assignToResponse.data);
+                    setUsers(assignToData.length > 0 ? assignToData : ['admin', 'manager', 'developer', 'tester', 'analyst']);
                 } catch (assignToError) {
                     console.error('Error fetching assigned to options:', assignToError);
-                    setUsers([]);
+                    setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 }
 
                 // Fetch Created By options from API with emp_name parameter
                 if (emp_name) {
                     try {
-                        const createdByResponse = await axios.get(`http://localhost:5050/poc/getCreatedBy?emp_name=${encodeURIComponent(emp_name)}`, {
+                        const token = localStorage.getItem('authToken');
+
+                        if (!token || isTokenExpired(token)) {
+                            handleAutoLogout();
+                            return;
+                        }
+
+                        const createdByResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getCreatedBy?emp_name=${encodeURIComponent(emp_name)}`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`
                             }
@@ -232,7 +356,35 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                         setCreatedByOptions([emp_name]);
                     }
                 } else {
-                    setCreatedByOptions([]);
+                    setCreatedByOptions(['admin', 'manager', 'user']);
+                }
+
+                // Fetch approvers from the new API endpoint
+                // Fetch approvers from the new API endpoint
+                try {
+                    const token = localStorage.getItem('authToken');
+
+                    if (!token || isTokenExpired(token)) {
+                        handleAutoLogout();
+                        return;
+                    }
+
+                    const approversResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllApprovedBy`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    console.log('Raw Approvers API Response:', approversResponse.data);
+
+                    // Direct mapping - simplest approach
+                    const approversData = approversResponse.data.map(approver => approver.name);
+                    console.log('Mapped Approver Names:', approversData);
+
+                    setApproverOptions(approversData.length > 0 ? approversData : ['admin', 'manager', 'supervisor']);
+                } catch (approversError) {
+                    console.error('Error fetching approved by options:', approversError);
+                    setApproverOptions(['admin', 'manager', 'supervisor']);
                 }
 
                 // Load other dropdown data
@@ -242,10 +394,11 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
                 // Fallback to dummy data if API fails
-                setSalesPersons([]);
+                setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setUsers([]);
-                setCreatedByOptions([]);
+                setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
+                setCreatedByOptions(['admin', 'manager', 'user']);
+                setApproverOptions(['admin', 'manager', 'supervisor']);
                 setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
             } finally {
                 setApiLoading(false);
@@ -253,23 +406,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         };
 
         fetchDropdownData();
-    }, []);
-
-    // Fetch next ID when prefix changes
-    useEffect(() => {
-        if (idPrefix) {
-            setPocId(`${idPrefix}-XX`);
-        } else {
-            setPocId('');
-        }
-    }, [idPrefix]);
-
-    // Show partner name field when entityType is Partner
-    useEffect(() => {
-        if (entityType !== 'Partner') {
-            setPartnerName('');
-        }
-    }, [entityType]);
+    }, [poc]);
 
     // Multi-user selection handlers
     const handleOpenUserDialog = () => {
@@ -289,11 +426,11 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         setUserDialogOpen(false);
     };
 
-    const handleToggleUser = (userEmail) => {
+    const handleToggleUser = (user) => {
         setSelectedUsers(prev =>
-            prev.includes(userEmail)
-                ? prev.filter(u => u !== userEmail)
-                : [...prev, userEmail]
+            prev.includes(user)
+                ? prev.filter(u => u !== user)
+                : [...prev, user]
         );
     };
 
@@ -317,13 +454,14 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
         if (!salesPerson) newErrors.salesPerson = 'Sales Person is required';
         if (assignedTo.length === 0) newErrors.assignedTo = 'At least one user must be assigned';
-        if (!createdBy) newErrors.createdBy = 'Created By is required';
+        // if (!createdBy) newErrors.createdBy = 'Created By is required';
         if (!startDate) newErrors.startDate = 'Start Date is required';
         if (!endDate) newErrors.endDate = 'End Date is required';
         if (!region) newErrors.region = 'Region is required';
-        if (!isBillable) newErrors.isBillable = 'Billable status is required';
+
         if (!pocType) newErrors.pocType = 'Usecase Type is required';
         if (tags.length === 0) newErrors.tags = 'At least one tag is required';
+        if (!status) newErrors.status = 'Status is required';
 
         setErrors(newErrors);
 
@@ -331,90 +469,91 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
             setLoading(true);
 
             try {
-                // Prepare form data
-                const formData = {
-                    pocId: idPrefix,
-                    pocName,
-                    entityType,
-                    entityName,
-                    partnerName: entityType === 'Partner' ? partnerName : '',
-                    salesPerson,
-                    description,
-                    assignedTo: assignedTo
-                        .map(email => {
-                            const user = users.find(u => u.email === email);
-                            return user?.name || email; // fallback unchanged
-                        })
-                        .join(','),
+                // Prepare form data for database
+                const normalizeDate = (value) => value && value.trim() !== "" ? value : null;
 
-                    createdBy: createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : ''),
-                    startDate,
-                    endDate,
-                    remark,
+                // Convert numeric fields properly - handle empty strings
+                const normalizeNumber = (value) => {
+                    if (value === '' || value === null || value === undefined) return null;
+                    const num = parseInt(value);
+                    return isNaN(num) ? null : num;
+                };
+
+                const formData = {
+                    pocName,
+                    entityName,
+                    entityType,
+                    partnerName,
+                    salesPerson,
                     region,
-                    isBillable: isBillable === 'Yes',
+
+                    status,
+                    startDate: normalizeDate(startDate),
+                    endDate: normalizeDate(endDate),
                     pocType,
+                    description,
                     spocEmail,
                     spocDesignation,
-                    tags: tags.join(',')
+                    tags: tags?.length ? tags.join(',') : null,
+                    assignedTo: assignedTo?.length ? assignedTo.join(',') : null,
+                    remark: remark || null,
+                    actualStartDate: normalizeDate(actualStartDate),
+                    actualEndDate: normalizeDate(actualEndDate),
+                    estimatedEfforts: normalizeNumber(estimatedEfforts),
+                    approvedBy: approvedBy || null,
+                    totalEfforts: normalizeNumber(totalEfforts),
+
                 };
-                console.log(formData);
 
                 const token = localStorage.getItem('authToken');
-                const response = await axios.post('http://localhost:5050/poc/savepocprjid', formData, {
+
+                if (!token || isTokenExpired(token)) {
+                    handleAutoLogout();
+                    return;
+                }
+
+                const response = await axios.put(`${import.meta.env.VITE_API}/poc/sales/update/${poc.pocId}`, formData, {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     }
                 });
 
-                // Fix the response handling - check for success message instead of success property
-                // Fix the response handling - check for success message instead of success property
-                if (response.data && (response.data.success || response.data.message === 'POC saved successfully' || response.data.message === 'Usecase saved successfully')) {
-                    alert('Usecase Code created successfully!');
-                    resetForm();
+
+                if (response.data.message && response.data.message.includes("successfully")) {
+                    // alert('Usecase Code updated successfully!');
                     if (onSuccess) {
-                        onSuccess(); // This should refresh the table data
+                        onSuccess();
                     }
-                    onClose(); // Close the form dialog
+                    onClose();
                 } else {
-                    alert('Failed to create Usecase Code: ' + (response.data.message || 'Unknown error'));
+                    alert('Failed to update Usecase Code: ' + (response.data.message || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('Error saving Usecase Code:', error);
+                console.error('Error updating Usecase Code:', error);
                 if (error.response?.status === 401) {
                     alert('Session expired. Please login again.');
+                } else if (error.response?.data?.message) {
+                    alert('Error updating Usecase: ' + error.response.data.message);
                 } else {
-                    alert('Error saving Usecase Code. Please try again.');
+                    alert('Error updating Usecase Code. Please try again.');
                 }
             } finally {
                 setLoading(false);
             }
         }
     };
-    const resetForm = () => {
-        setIdPrefix('');
-        setPocId('');
-        setPocName('');
-        setEntityType('');
-        setEntityName('');
-        setPartnerName('');
-        setSalesPerson('');
-        setDescription('');
-        setAssignedTo([]);
-        setCreatedBy('');
-        setStartDate('');
-        setEndDate('');
-        setRemark('');
-        setRegion('');
-        setIsBillable('');
-        setPocType('');
-        setSpocEmail('');
-        setSpocDesignation('');
-        setTags([]);
-        setErrors({});
-        setActiveStep(0);
-    };
+
+    // Add this useEffect after your state declarations
+    useEffect(() => {
+        // If createdBy is empty, set it from the API data or current user
+        if (!createdBy && poc?.createdBy) {
+            setCreatedBy(poc.createdBy);
+        } else if (!createdBy) {
+            // Fallback to current user name
+            setCreatedBy(getemp_name() || 'System');
+        }
+    }, [createdBy, poc?.createdBy]);
 
     const handleTagSelect = (tag) => {
         if (!tags.includes(tag)) {
@@ -430,6 +569,11 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     };
 
     const handleNextStep = () => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
         // Validate current step before proceeding
         let stepValid = true;
         const newErrors = {};
@@ -467,21 +611,12 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     stepValid = false;
                 }
                 break;
-            // In the handleNextStep function, update the case 2 validation:
             case 2:
                 if (assignedTo.length === 0) {
                     newErrors.assignedTo = 'At least one user must be assigned';
                     stepValid = false;
                 }
-                // Remove the createdBy validation since it's commented out in the form
-                // if (!createdBy) {
-                //     newErrors.createdBy = 'Created By is required';
-                //     stepValid = false;
-                // }
-                if (!isBillable) {
-                    newErrors.isBillable = 'Billable status is required';
-                    stepValid = false;
-                }
+
                 if (!startDate) {
                     newErrors.startDate = 'Start Date is required';
                     stepValid = false;
@@ -500,6 +635,10 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     newErrors.tags = 'At least one tag is required';
                     stepValid = false;
                 }
+                if (!status) {
+                    newErrors.status = 'Status is required';
+                    stepValid = false;
+                }
                 break;
             default:
                 break;
@@ -516,12 +655,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     const handleBackStep = () => {
         setActiveStep((prev) => prev - 1);
     };
-    // Auto-populate createdBy with the first available option
-    useEffect(() => {
-        if (createdByOptions.length > 0 && !createdBy) {
-            setCreatedBy(createdByOptions[0]);
-        }
-    }, [createdByOptions, createdBy]);
+
     const steps = ['Basic Information', 'Client Details', 'Team & Timeline', 'Additional Information'];
 
     const renderStepContent = (step) => {
@@ -529,67 +663,86 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
             case 0:
                 return (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        {/* Grid for fields */}
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr", // two equal columns
-                                gap: 2,
-                            }}
-                        >
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                            {/* Usecase ID - Display only */}
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Usecase ID
+                                </Typography>
+                                <Box sx={{
+                                    padding: '8px 12px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#f5f5f5',
+                                    minHeight: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    fontSize: '14px'
+                                }}>
+                                    {pocId || 'N/A'}
+                                </Box>
+                            </Box>
+
                             <Dropdown
                                 label="Usecase Type"
-                                options={idPrefixOptions}
-                                value={idPrefix}
-                                onChange={setIdPrefix}
-                                error={errors.idPrefix}
-                                placeholder="Select ID Prefix"
+                                options={[
+                                    'Solution-Consultation',
+                                    'Proposal',
+                                    'Pre-sales',
+                                    'Demo',
+                                    'Task',
+                                    'Internal',
+                                    'Event',
+                                    'BRD',
+                                    'Requirement-Gathering',
+                                    'Feasibility-Study',
+                                    'Compliance-Documentation',
+                                    'UseCase-Preparation',
+                                    'Presentation',
+                                    'Workshop',
+                                    'R&D-and-Exploration',
+                                    'Others',
+                                    'POC',
+                                    'Implementation'
+                                ]}
+                                value={pocType}
+                                onChange={setPocType}
+                                error={errors.pocType}
+                                placeholder="Select Usecase Type"
                                 required
                                 icon={<AssignmentIcon />}
                             />
 
-                            <TextInput
-                                label="Usecase Name"
-                                value={pocName}
-                                onChange={setPocName}
-                                error={errors.pocName}
-                                placeholder="Enter Usecase Name"
-                                required
-                                icon={<WorkIcon />}
-                            />
                         </Box>
 
-                        {/* Description full width, bigger */}
+                        <TextInput
+                            label="Usecase Name"
+                            value={pocName}
+                            onChange={setPocName}
+                            error={errors.pocName}
+                            placeholder="Enter Usecase Name"
+                            required
+                            icon={<WorkIcon />}
+                        />
+
                         <TextInput
                             label="Description"
                             value={description}
                             onChange={setDescription}
                             placeholder="Enter Description"
                             multiline
-                            rows={6}                // increase height
-                            fullWidth               // take full width
+                            rows={6}
+                            fullWidth
                             icon={<DescriptionIcon />}
-                            sx={{
-                                gridColumn: "span 2", // if inside a grid, span across both columns
-                                minHeight: "150px",   // force a taller input
-                            }}
+                            sx={{ minHeight: "150px" }}
                         />
-
                     </Box>
-
                 );
 
             case 1:
                 return (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        {/* Row 1: Client Type + Company Name + Partner Name */}
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr 1fr",
-                                gap: 2,
-                            }}
-                        >
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
                             <Dropdown
                                 label="Client Type"
                                 options={["Partner", "Client", "Internal"]}
@@ -624,14 +777,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             )}
                         </Box>
 
-                        {/* Row 2: Sales Person + Region + SPOC Email */}
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr 1fr",
-                                gap: 2,
-                            }}
-                        >
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
                             <Dropdown
                                 label="Sales Person"
                                 options={salesPersons}
@@ -665,14 +811,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             />
                         </Box>
 
-                        {/* Row 3: SPOC Designation */}
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr",
-                                gap: 2,
-                            }}
-                        >
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
                             <TextInput
                                 label="SPOC Designation"
                                 value={spocDesignation}
@@ -682,9 +821,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             />
                         </Box>
                     </Box>
-
                 );
-
 
             case 2:
                 return (
@@ -695,7 +832,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             </Typography>
                             <Button
                                 variant="outlined"
-                                onClick={handleOpenUserDialog}
+                                onClick={() => safeAction(() => handleOpenUserDialog())}
                                 startIcon={<GroupIcon />}
                                 fullWidth
                                 sx={{ justifyContent: 'flex-start', mb: 1 }}
@@ -708,35 +845,28 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 </Typography>
                             )}
 
-                            {/* Show selected names only - removed the image and back button */}
                             {assignedTo.length > 0 && (
                                 <Box sx={{ mt: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                    <Typography variant="caption" color="text.secondary">
                                         Selected team members:
                                     </Typography>
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                        {assignedTo.map(email => {
-                                            // Find user by email to get name
-                                            const user = users.find(u => u.email === email || u === email);
-                                            const displayName = user?.name || email;
-
-                                            return (
-                                                <Chip
-                                                    key={email}
-                                                    label={displayName} // Show name instead of email
-                                                    size="small"
-                                                    color="primary"
-                                                    variant="outlined"
-                                                />
-                                            );
-                                        })}
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                                        {assignedTo.map(user => (
+                                            <Chip
+                                                key={user}
+                                                label={user}
+                                                size="small"
+                                                onDelete={() => setAssignedTo(prev => prev.filter(u => u !== user))}
+                                                avatar={<Avatar sx={{ width: 24, height: 24 }}>{user.charAt(0)}</Avatar>}
+                                            />
+                                        ))}
                                     </Box>
                                 </Box>
                             )}
                         </Box>
 
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                            {/* Created By - Display only with the available option */}
+                            {/* Created By - Display only */}
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
                                     Created By
@@ -751,20 +881,11 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                     alignItems: 'center',
                                     fontSize: '14px'
                                 }}>
-                                    {createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : 'N/A')}
+                                    {createdBy || 'N/A'}
                                 </Box>
                             </Box>
 
-                            <Dropdown
-                                label="Is Billable"
-                                options={['Yes', 'No']}
-                                value={isBillable}
-                                onChange={setIsBillable}
-                                error={errors.isBillable}
-                                placeholder="Select Billable Status"
-                                required
-                                icon={<MoneyIcon />}
-                            />
+
                         </Box>
 
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -816,41 +937,85 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 )}
                             </Box>
                         </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Actual Start Date
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={actualStartDate}
+                                    onChange={(e) => setActualStartDate(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                            </Box>
+
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Actual End Date
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={actualEndDate}
+                                    onChange={(e) => setActualEndDate(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                            </Box>
+                        </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <TextInput
+                                label="Estimated Efforts"
+                                value={estimatedEfforts}
+                                onChange={setEstimatedEfforts}
+                                placeholder="Enter estimated efforts"
+                                type="number"
+                                icon={<WorkIcon />}
+                            />
+
+                            <TextInput
+                                label="Total Efforts"
+                                value={totalEfforts}
+                                onChange={setTotalEfforts}
+                                placeholder="Enter total efforts"
+                                type="number"
+                                icon={<WorkIcon />}
+                            />
+                        </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+
+
+                            <Dropdown
+                                label="Approved By"
+                                options={approverOptions}
+                                value={approvedBy}
+                                onChange={setApprovedBy}
+                                placeholder="Select Approver"
+                                loading={apiLoading}
+                                icon={<PersonIcon />}
+                            />
+                        </Box>
                     </Box>
                 );
-
 
             case 3:
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                            <Dropdown
-                                label="Usecase Type"
-                                options={[
-                                    'POC',
-                                    'POP',
-                                    'PRJ Usecase',
-                                    'Partner Support',
-                                    'Feasibility Check',
-                                    'Operational Support',
-                                    'R&D',
-                                    'Solution Consultation',
-                                    'Efforts Estimation',
-                                    'Task',
-                                    'Demo',
-                                    'Internal',
-                                    'Event',
-                                    'Workshop',
-                                    'Support',
-                                    'Vco Create'
-                                ]}
-                                value={pocType}
-                                onChange={setPocType}
-                                error={errors.pocType}
-                                placeholder="Select Usecase Type"
-                                required
-                                icon={<AssignmentIcon />}
-                            />
 
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
@@ -893,17 +1058,49 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             </Box>
                         </Box>
 
-                        <TextInput
-                            label="Remark"
-                            value={remark}
-                            onChange={setRemark}
-                            placeholder="Enter Remarks"
-                            multiline
-                            rows={3}
-                            icon={<DescriptionIcon />}
-                        />
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <TextInput
+                                label="Remark"
+                                value={remark}
+                                onChange={setRemark}
+                                placeholder="Enter Remarks"
+                                multiline
+                                rows={3}
+                                icon={<DescriptionIcon />}
+                            />
 
+                            <Dropdown
+                                label="Status"
+                                options={['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled', 'Awaiting', 'Hold', 'Closed', 'Converted']}
+                                value={status}
+                                onChange={setStatus}
+                                error={errors.status}
+                                placeholder="Select Status"
+                                required
+                                icon={<CheckCircleIcon />}
+                            />
+                        </Box>
 
+                        {/* Submit button on the last page */}
+                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                loading={loading}
+                                disabled={apiLoading}
+                                onClick={() => safeAction(handleSubmit)}
+                                startIcon={<CheckCircleIcon />}
+                                sx={{
+                                    backgroundColor: '#1976d2',
+                                    '&:hover': {
+                                        backgroundColor: '#1565c0'
+                                    },
+                                    minWidth: '200px'
+                                }}
+                            >
+                                {loading ? 'Updating Usecase...' : 'Update Usecase'}
+                            </Button>
+                        </Box>
                     </Box>
                 );
 
@@ -913,7 +1110,14 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     };
 
     return (
-        <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box
+            sx={{
+                p: 3,
+                pointerEvents: logoutInProgress.current ? 'none' : 'auto',
+                opacity: logoutInProgress.current ? 0.6 : 1
+            }}
+        >
+
             {/* Header with close button */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -922,8 +1126,9 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                         alt="Company Logo"
                         style={{ height: '40px' }}
                     />
+
                 </Box>
-                <IconButton onClick={onClose} aria-label="close">
+                <IconButton onClick={() => safeAction(onClose)} aria-label="close">
                     <CloseIcon />
                 </IconButton>
             </Box>
@@ -955,7 +1160,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
                                 <Button
                                     variant="outlined"
-                                    onClick={handleBackStep}
+                                    onClick={() => safeAction(handleBackStep)}
                                     disabled={activeStep === 0}
                                     startIcon={<RemoveIcon />}
                                 >
@@ -965,7 +1170,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 {activeStep < steps.length - 1 ? (
                                     <Button
                                         variant="contained"
-                                        onClick={handleNextStep}
+                                        onClick={() => safeAction(handleNextStep)}
                                         endIcon={<AddIcon />}
                                     >
                                         Next
@@ -977,15 +1182,15 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 </form>
             </Paper>
 
-            {/* Submit button - Only show on last step */}
-            {activeStep === steps.length - 1 && (
+            {/* Submit button - Always visible at the bottom */}
+            {activeStep !== 3 && (
                 <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                     <Button
                         type="submit"
                         variant="contained"
                         loading={loading}
                         disabled={apiLoading}
-                        onClick={handleSubmit}
+                        onClick={() => safeAction(handleSubmit)}
                         startIcon={<CheckCircleIcon />}
                         sx={{
                             backgroundColor: '#1976d2',
@@ -995,7 +1200,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             minWidth: '200px'
                         }}
                     >
-                        {loading ? 'Creating Usecase...' : 'Create Usecase'}
+                        {loading ? 'Updating Usecase...' : 'Update Usecase'}
                     </Button>
                 </Box>
             )}
@@ -1020,61 +1225,50 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 </DialogTitle>
                 <DialogContent dividers sx={{ p: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                        <Button size="small" onClick={handleSelectAllUsers}>
+                        <Button size="small" onClick={() => safeAction(handleSelectAllUsers)}>
                             Select All
                         </Button>
-                        <Button size="small" onClick={handleDeselectAllUsers}>
+                        <Button size="small" onClick={() => safeAction(handleDeselectAllUsers)}>
                             Deselect All
                         </Button>
                     </Box>
 
-
                     <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                        {users.map((user, index) => {
-                            // Get user data - user could be object or string (for fallback)
-                            const userEmail = user.email || user;
-                            const userName = user.name || user.email || user;
-
-                            return (
-                                <ListItem key={`${userEmail}-${index}`} disablePadding>
-                                    <ListItemButton onClick={() => handleToggleUser(userEmail)}>
-                                        <ListItemIcon>
-                                            <Checkbox
-                                                edge="start"
-                                                checked={selectedUsers.includes(userEmail)}
-                                                tabIndex={-1}
-                                                disableRipple
-                                            />
-                                        </ListItemIcon>
-                                        <ListItemText
-                                            primary={userName} // Show name as primary
-                                            secondary={userEmail} // Show email as secondary
+                        {users.map((user, index) => (
+                            <ListItem key={`${user}-${index}`} disablePadding>
+                                <ListItemButton onClick={() => safeAction(() => handleToggleUser(user))}>
+                                    <ListItemIcon>
+                                        <Checkbox
+                                            edge="start"
+                                            checked={selectedUsers.includes(user)}
+                                            tabIndex={-1}
+                                            disableRipple
                                         />
-                                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                                            {userName.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                    </ListItemButton>
-                                </ListItem>
-                            );
-                        })}
+                                    </ListItemIcon>
+                                    <ListItemText
+                                        primary={user}
+                                        secondary={`${user.toLowerCase()}@company.com`}
+                                    />
+                                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                                        {user.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
                     </List>
 
                     {selectedUsers.length > 0 && (
                         <Box sx={{ mt: 2 }}>
                             <Typography variant="body2" color="text.secondary">
-                                Selected: {selectedUsers.map(email => {
-                                    // Find user by email to get name
-                                    const user = users.find(u => u.email === email || u === email);
-                                    return user?.name || email;
-                                }).join(', ')}
+                                Selected: {selectedUsers.join(', ')}
                             </Typography>
                         </Box>
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={handleCloseUserDialog}>Cancel</Button>
+                    <Button onClick={() => safeAction(handleCloseUserDialog)}>Cancel</Button>
                     <Button
-                        onClick={handleSaveUsers}
+                        onClick={() => safeAction(handleSaveUsers)}
                         variant="contained"
                         disabled={selectedUsers.length === 0}
                     >
@@ -1086,4 +1280,4 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     );
 };
 
-export default PocPrjId;
+export default SalesPrjIdEdit;

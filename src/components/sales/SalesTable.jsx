@@ -41,6 +41,7 @@ import {
     alpha,
     useTheme
 } from '@mui/material';
+
 import {
     Search as SearchIcon,
     Visibility as VisibilityIcon,
@@ -59,14 +60,142 @@ import { yellow as yellowColor } from '@mui/material/colors';
 import axios from 'axios';
 
 // Import the form components
-import PocPrjId from './PocPrjId';
-import PocPrjIdEdit from './PocPrjIdEdit';
+import SalesPrjId from './SalesPrjId';
+import SalesPrjIdEdit from './SalesPrjIdEdit';
 
 
+// const logoutInProgress = React.useRef(false);
 
 
-const PocTable = ({ onNavigate, onLogout, user }) => {
-    console.log('PocTable component mounted');
+// Memoized table row component
+const TableRowMemo = React.memo(({
+    poc,
+    visibleColumns,
+    columnConfig,
+    rowSelection,
+    theme,
+    handleRowSelect,
+    handleViewDetails,
+    handleEditOpen,
+    handleDeleteClick,
+    editingRemark,
+    remarkText,
+    handleStartEditRemark,
+    handleRemarkUpdate,
+    handleCancelEditRemark,
+    truncateText,
+    formatDate,
+    handleOpenStatusMenu,
+    getStatusColor
+}) => {
+    return (
+        <TableRow
+            hover
+            selected={rowSelection[poc.pocId]}
+            sx={{
+                '&:nth-of-type(even)': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.02)
+                },
+                '&.Mui-selected': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.1)
+                }
+            }}
+        >
+            {/* Selection checkbox */}
+            <TableCell padding="checkbox">
+                <Checkbox
+                    size="small"
+                    checked={!!rowSelection[poc.pocId]}
+                    onChange={() => handleRowSelect(poc.pocId)}
+                    sx={{ cursor: 'pointer' }}
+                />
+            </TableCell>
+
+            {Object.entries(columnConfig).map(([key, config]) =>
+                visibleColumns[key] && (
+                    <TableCell key={key} sx={{ whiteSpace: 'nowrap' }}>
+                        {config.render ? (
+                            config.render(poc)
+                        ) : (
+                            <Tooltip title={poc[key] || '-'}>
+                                <span>
+                                    {config.truncate ?
+                                        truncateText(poc[key], config.truncate) :
+                                        (poc[key] || '-')
+                                    }
+                                </span>
+                            </Tooltip>
+                        )}
+                    </TableCell>
+                )
+            )}
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                <Tooltip title="View Details">
+                    <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleViewDetails(poc)}
+                        sx={{ mr: 0.5 }}
+                    >
+                        <VisibilityIcon />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Edit">
+                    <IconButton
+                        size="small"
+                        color="secondary"
+                        onClick={() => handleEditOpen(poc)}
+                        sx={{ mr: 0.5 }}
+                    >
+                        <EditIcon />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete">
+                    <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDeleteClick(poc)}
+                    >
+                        <DeleteIcon />
+                    </IconButton>
+                </Tooltip>
+            </TableCell>
+        </TableRow>
+    );
+}, (prevProps, nextProps) => {
+    // Custom comparison function for React.memo
+    return (
+        prevProps.poc.pocId === nextProps.poc.pocId &&
+        prevProps.poc.status === nextProps.poc.status &&   // ✅ ADD THIS
+        prevProps.rowSelection[prevProps.poc.pocId] === nextProps.rowSelection[nextProps.poc.pocId] &&
+        prevProps.editingRemark?.pocId === nextProps.editingRemark?.pocId &&
+        prevProps.remarkText === nextProps.remarkText &&
+        JSON.stringify(prevProps.visibleColumns) === JSON.stringify(nextProps.visibleColumns)
+    );
+});
+
+TableRowMemo.displayName = 'TableRowMemo';
+
+// Detail Item component
+const DetailItem = React.memo(({ label, value, render }) => (
+    <Box sx={{ mb: 1 }}>
+        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+            {label}:
+        </Typography>
+        {render ? (
+            render(value)
+        ) : (
+            <Typography variant="body1">
+                {value || '-'}
+            </Typography>
+        )}
+    </Box>
+));
+
+DetailItem.displayName = 'DetailItem';
+
+const SalesTable = ({ onNavigate, onLogout, user }) => {
+    console.log('SalesTable component mounted');
 
     const theme = useTheme();
     const [open, setOpen] = React.useState(false);
@@ -76,21 +205,79 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     const [page, setPage] = React.useState(0);
     const [rowsPerPage, setRowsPerPage] = React.useState(10);
     const [searchTerm, setSearchTerm] = React.useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = React.useState('');
     const [selectedPoc, setSelectedPoc] = React.useState(null);
     const [detailDialogOpen, setDetailDialogOpen] = React.useState(false);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
     const [pocToDelete, setPocToDelete] = React.useState(null);
     const [pocToEdit, setPocToEdit] = React.useState(null);
     const [snackbar, setSnackbar] = React.useState({ open: false, message: '', severity: 'success' });
-    // Add these state variables after other state declarations
     const [rowSelection, setRowSelection] = React.useState({});
     const [exportMenuAnchor, setExportMenuAnchor] = React.useState(null);
-
-    // Column selection state
     const [columnMenuAnchor, setColumnMenuAnchor] = React.useState(null);
+
+    const logoutInProgress = React.useRef(false);
+
+    const handleLogout = React.useCallback(async () => {
+        try {
+            await axios.post(`${import.meta.env.VITE_API}/poc/api/auth/logout`, {}, {
+                withCredentials: true
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            if (onLogout) {
+                onLogout();
+            }
+        }
+    }, [onLogout]);
+
+    const handleAutoLogout = React.useCallback(() => {
+        if (logoutInProgress.current) return;
+
+        logoutInProgress.current = true;
+        handleLogout();
+    }, [handleLogout]);
+
+
+    const isTokenExpired = (token) => {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    };
+
+    React.useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+    }, [handleAutoLogout]);
+
+    const safeNavigate = React.useCallback((route) => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+
+        onNavigate(route);
+    }, [onNavigate, handleAutoLogout]);
+
+
+
+    // Column visibility state
     const [visibleColumns, setVisibleColumns] = React.useState({
         pocId: true,
         pocName: true,
+        pocType: true,
         assignedTo: false,
         startDate: true,
         endDate: true,
@@ -101,11 +288,9 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         totalWorkedHours: true,
         entityType: false,
         entityName: true,
-        partnerName: true,
         salesPerson: false,
         region: false,
-        isBillable: false,
-        pocType: false,
+
         description: false,
         spocEmail: false,
         spocDesignation: false,
@@ -114,7 +299,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         estimatedEfforts: false,
         approvedBy: false,
         totalEfforts: false,
-        varianceDays: false
+
     });
 
     // Column filter state
@@ -123,7 +308,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         pocName: '',
         entityType: '',
         entityName: '',
-        partnerName: '',
         salesPerson: '',
         region: '',
         isBillable: '',
@@ -142,7 +326,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         estimatedEfforts: '',
         approvedBy: '',
         totalEfforts: '',
-        varianceDays: '',
+
         remark: '',
         totalWorkedHours: ''
     });
@@ -151,629 +335,55 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     const [filterAnchorEl, setFilterAnchorEl] = React.useState(null);
     const [currentFilterColumn, setCurrentFilterColumn] = React.useState('');
 
-    const handleOpen = () => setOpen(true);
-    // const handleClose = () => setOpen(false);
-    const handleClose = () => {
-        setOpen(false);
-        // Refresh token or validate session when modal closes
-        validateToken();
-    };
-    const handleEditOpen = (poc) => {
-        setPocToEdit(poc);
-        setEditOpen(true);
-    };
-    // const handleEditClose = () => {
-    //     setEditOpen(false);
-    //     setPocToEdit(null);
-    // };
-    const handleEditClose = () => {
-        setEditOpen(false);
-        setPocToEdit(null);
-        validateToken();
-    };
-
-    // Handle row selection
-    const handleRowSelect = (pocId) => {
-        setRowSelection(prev => ({
-            ...prev,
-            [pocId]: !prev[pocId]
-        }));
-    };
-
-    // Handle select all on current page
-    const handleSelectAllOnPage = () => {
-        const allSelectedOnPage = paginatedData.every(poc => rowSelection[poc.pocId]);
-
-        if (allSelectedOnPage) {
-            // If all are selected, deselect all on current page
-            const newSelection = { ...rowSelection };
-            paginatedData.forEach(poc => {
-                delete newSelection[poc.pocId];
-            });
-            setRowSelection(newSelection);
-        } else {
-            // If not all are selected, select all on current page
-            const newSelection = { ...rowSelection };
-            paginatedData.forEach(poc => {
-                newSelection[poc.pocId] = true;
-            });
-            setRowSelection(newSelection);
-        }
-    };
-
-    // Handle deselect all
-    const handleDeselectAll = () => {
-        setRowSelection({});
-    };
-
-    // Get selected rows
-    const getSelectedRows = () => {
-        return pocData.filter(poc => rowSelection[poc.pocId]);
-    };
-
-    // Export to CSV function - Export ALL columns by default
-    const exportToCSV = (data, filename) => {
-        if (!data || data.length === 0) return;
-
-        // Always use all columns regardless of visibility
-        const columnsToExport = Object.entries(columnConfig);
-
-        const headers = columnsToExport.map(([key, config]) => config.label);
-
-        const csvData = data.map(poc => {
-            return columnsToExport.map(([key, config]) => {
-                let value = poc[key];
-
-                // Handle special rendering cases
-                if (config.render) {
-                    // For rendered values, get the text content
-                    if (key === 'status') {
-                        return poc.status || 'Draft';
-                    } else if (key === 'isBillable') {
-                        // Return the actual value from the record instead of hardcoded values
-                        return poc.isBillable === true || poc.isBillable === 'Yes' ? 'Yes' : 'No';
-                    } else if (key === 'remark') {
-                        return poc.remark || '';
-                    } else if (key === 'pocId') {
-                        return poc.pocId;
-                    } else if (key === 'totalWorkedHours') {
-                        const hours = poc.totalWorkedHours;
-                        if (hours === null || hours === undefined || hours === '') return '';
-                        const totalHours = parseFloat(hours);
-                        if (isNaN(totalHours)) return '';
-                        const wholeHours = Math.floor(totalHours);
-                        const minutes = Math.round((totalHours - wholeHours) * 60);
-                        return `${wholeHours}:${minutes.toString().padStart(2, '0')}`;
-                    }
-                }
-
-                // Handle date fields
-                if (key.includes('Date') && value) {
-                    return formatDate(value);
-                }
-
-                // Handle null/undefined values
-                if (value === null || value === undefined) return '';
-
-                return value.toString();
-            });
-        });
-
-        const csvContent = [
-            headers,
-            ...csvData
-        ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    // Export handlers - all now export ALL columns
-    const handleExportSelected = () => {
-        const selectedRows = getSelectedRows();
-        if (selectedRows.length === 0) {
-            showSnackbar('No rows selected for export', 'warning');
-            return;
-        }
-        exportToCSV(selectedRows, `selected-usecases-${new Date().toISOString().split('T')[0]}.csv`);
-        setExportMenuAnchor(null);
-        showSnackbar(`Exported ${selectedRows.length} rows to CSV with all columns`, 'success');
-    };
-
-    const handleExportAll = () => {
-        exportToCSV(filteredData, `all-usecases-${new Date().toISOString().split('T')[0]}.csv`);
-        setExportMenuAnchor(null);
-        showSnackbar(`Exported all ${filteredData.length} rows to CSV with all columns`, 'success');
-    };
-
-    const handleExportPage = () => {
-        exportToCSV(paginatedData, `page-usecases-${new Date().toISOString().split('T')[0]}.csv`);
-        setExportMenuAnchor(null);
-        showSnackbar(`Exported page ${page + 1} rows to CSV with all columns`, 'success');
-    };
-
-
-    // Export menu handlers
-    const handleOpenExportMenu = (event) => {
-        setExportMenuAnchor(event.currentTarget);
-    };
-
-    const handleCloseExportMenu = () => {
-        setExportMenuAnchor(null);
-    };
-
-    // Check if any rows are selected
-    const hasSelectedRows = Object.keys(rowSelection).some(key => rowSelection[key]);
-
-
-
-    // Add token validation function
-    const validateToken = async () => {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            handleLogout();
-            return;
-        }
-
-        try {
-            await axios.get('http://localhost:5050/poc/api/auth/validate', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-        } catch (error) {
-            if (error.response?.status === 401) {
-                handleLogout();
-            }
-        }
-    };
-
-    // // Update the handleLogout function in PocTable
-    // const handleLogout = async () => {
-    //     try {
-    //         await axios.post('http://localhost:5050/poc/api/auth/logout', {}, {
-    //             withCredentials: true
-    //         });
-    //     } catch (error) {
-    //         console.error('Logout error:', error);
-    //     } finally {
-    //         localStorage.removeItem('authToken');
-    //         localStorage.removeItem('user');
-    //         if (onLogout) {
-    //             onLogout(); // Call the parent logout function
-    //         }
-    //     }
-    // };
-
-
-    // Update the handleLogout function in PocTable
-    const handleLogout = async () => {
-        try {
-            await axios.post('http://localhost:5050/poc/api/auth/logout', {}, {
-                withCredentials: true
-            });
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
-            if (onLogout) {
-                onLogout(); // Call the parent logout function
-            }
-        }
-    };
-    // Fetch POC data
-    const fetchPocData = async () => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('authToken');
-            const response = await axios.get('http://localhost:5050/poc/all', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            // Improved sorting logic - prioritize by creation date, then by update date
-            const normalizedData = response.data.map(item => ({
-                ...item,
-                isBillable:
-                    item.isBillable === true ||
-                    String(item.isBillable).trim().toLowerCase() === 'yes'
-            }));
-
-            const sortedData = normalizedData.sort((a, b) => {
-
-                // Try to get the most recent date for comparison
-                const getMostRecentDate = (item) => {
-                    // Priority: updatedAt > createdAt > startDate
-                    if (item.updatedAt) return new Date(item.updatedAt);
-                    if (item.createdAt) return new Date(item.createdAt);
-                    if (item.startDate) return new Date(item.startDate);
-                    return new Date(0); // Fallback to epoch if no dates available
-                };
-
-                const dateA = getMostRecentDate(a);
-                const dateB = getMostRecentDate(b);
-
-                // Sort in descending order (newest first)
-                return dateB.getTime() - dateA.getTime();
-            });
-
-            setPocData(sortedData);
-        } catch (error) {
-            console.error('Error fetching Usecase data:', error);
-            showSnackbar('Failed to fetch Usecase data', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    React.useEffect(() => {
-        localStorage.removeItem('pocTableColumns');
-        fetchPocData();
-
-        // Load column preferences from localStorage if available
-        const savedColumns = localStorage.getItem('pocTableColumns');
-        if (savedColumns) {
-            setVisibleColumns(JSON.parse(savedColumns));
-        }
-    }, []);
-
-    // Save column preferences to localStorage when they change
-    // React.useEffect(() => {
-    //     console.log('PocTable useEffect running - check what triggers this');
-    //     localStorage.setItem('pocTableColumns', JSON.stringify(visibleColumns));
-    // }, [visibleColumns]);
-
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
-
-    const handleChangeRowsPerPage = (event) => {
-        setRowsPerPage(parseInt(event.target.value, 10));
-        setPage(0);
-    };
-
-    // Handle column filter change
-    const handleColumnFilterChange = (column, value) => {
-        setColumnFilters(prev => ({
-            ...prev,
-            [column]: value
-        }));
-        setPage(0); // Reset to first page when filtering
-    };
-
-    // Clear specific column filter - update to handle arrays
-    const handleClearColumnFilter = (column) => {
-        if (column === 'status') {
-            handleColumnFilterChange(column, []);
-        } else {
-            handleColumnFilterChange(column, '');
-        }
-    };
-
-    // Clear all filters - update for status array
-    const handleClearAllFilters = () => {
-        const clearedFilters = Object.keys(columnFilters).reduce((acc, key) => {
-            acc[key] = key === 'status' ? [] : '';
-            return acc;
-        }, {});
-        setColumnFilters(clearedFilters);
-        setSearchTerm('');
-    };
-
-    // Open filter popover
-    const handleOpenFilterPopover = (event, column) => {
-        setFilterAnchorEl(event.currentTarget);
-        setCurrentFilterColumn(column);
-    };
-
-    // Close filter popover
-    const handleCloseFilterPopover = () => {
-        setFilterAnchorEl(null);
-        setCurrentFilterColumn('');
-    };
-
-    // Filter data based on search term and column filters
-    const filteredData = pocData.filter(poc => {
-        // Global search filter
-        const matchesGlobalSearch =
-            !searchTerm ||
-            poc.pocId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.pocName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.entityName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.partnerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.salesPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.entityType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.assignedTo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.tags?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.approvedBy?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            poc.totalWorkedHours?.toString().toLowerCase().includes(searchTerm.toLowerCase());
-
-        // Column filters
-        const matchesColumnFilters = Object.entries(columnFilters).every(([column, filterValue]) => {
-            if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0)) return true;
-
-            const pocValue = poc[column];
-            if (pocValue === null || pocValue === undefined) return false;
-
-            // Handle status with multiple selection
-            if (column === 'status' && Array.isArray(filterValue)) {
-                return filterValue.length === 0 || filterValue.includes(pocValue);
-            }
-
-            // Handle boolean values (isBillable) - keep existing
-            if (column === 'isBillable') {
-                const value = (pocValue ?? '').toString().trim().toLowerCase();
-
-                if (filterValue === 'true') return value === 'yes';
-                if (filterValue === 'false') return value === 'no';
-                return true;
-            }
-
-
-            // Handle date fields
-            if (column.includes('Date') && pocValue) {
-                const date = new Date(pocValue).toLocaleDateString();
-                return date.includes(filterValue);
-            }
-
-            // Handle status with exact match
-            if (column === 'status') {
-                return pocValue?.toLowerCase() === filterValue.toLowerCase();
-            }
-
-            // Default string contains match
-            return pocValue.toString().toLowerCase().includes(filterValue.toLowerCase());
-        });
-
-        return matchesGlobalSearch && matchesColumnFilters;
-    });
-
-    const paginatedData = filteredData.slice(
-        page * rowsPerPage,
-        page * rowsPerPage + rowsPerPage
-    );
-
-    // Get unique values for filter dropdowns
-    const getUniqueValues = (column) => {
-        const values = pocData
-            .map(item => item[column])
-            .filter((value, index, self) =>
-                value !== undefined &&
-                value !== null &&
-                self.indexOf(value) === index
-            )
-            .sort();
-
-        return values;
-    };
-
-    // Check if any filters are active - update for array filters
-    const hasActiveFilters = () => {
-        return searchTerm || Object.values(columnFilters).some(value =>
-            (Array.isArray(value) && value.length > 0) ||
-            (!Array.isArray(value) && value !== '')
-        );
-    };
-
-    const handleViewDetails = (poc) => {
-        setSelectedPoc(poc);
-        setDetailDialogOpen(true);
-    };
-
-    const handleCloseDetails = () => {
-        setDetailDialogOpen(false);
-        setSelectedPoc(null);
-    };
-
-    const handleDeleteClick = (poc) => {
-        setPocToDelete(poc);
-        setDeleteConfirmOpen(true);
-    };
-
-    const handleDeleteConfirm = async () => {
-        if (!pocToDelete) return;
-
-        try {
-            const token = localStorage.getItem('authToken');
-            await axios.delete(`http://localhost:5050/poc/delete/${pocToDelete.pocId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            // Remove the deleted item from local state
-            setPocData(prevData => prevData.filter(item => item.pocId !== pocToDelete.pocId));
-            showSnackbar('Usecase record deleted successfully', 'success');
-        } catch (error) {
-            console.error('Error deleting Usecase:', error);
-            showSnackbar('Failed to delete Usecase record', 'error');
-        } finally {
-            setDeleteConfirmOpen(false);
-            setPocToDelete(null);
-        }
-    };
-
-    const handleDeleteCancel = () => {
-        setDeleteConfirmOpen(false);
-        setPocToDelete(null);
-    };
-
-    const showSnackbar = (message, severity) => {
-        setSnackbar({ open: true, message, severity });
-    };
-
-    const handleCloseSnackbar = () => {
-        setSnackbar({ ...snackbar, open: false });
-    };
-
-
-    const themeNew = createTheme({
-        palette: {
-            // you might already have primary, secondary, etc.
-            yellow: {
-                main: yellowColor[500],
-                light: yellowColor[300],
-                dark: yellowColor[700],
-                contrastText: '#000',   // choose black if yellow is light
-            },
-        },
-    });
-
-
-    const getStatusColor = (status) => {
-        switch (status?.toLowerCase()) {
-            case 'completed': return { muiColor: 'success' };
-            case 'in progress': return { muiColor: 'warning' };
-            case 'pending': return { muiColor: 'secondary' };
-            case 'dropped': return { muiColor: 'error' };
-            case 'draft': return { muiColor: 'default' };
-            case 'awaiting': return { muiColor: 'info' };
-            case 'hold': return { customColor: 'yellow', textColor: 'black' };
-            case 'closed': return { customColor: 'cyan', textColor: 'black' };
-            case 'converted': return { customColor: 'lawngreen', textColor: 'black' };
-            case 'live': return { customColor: 'Lime', textColor: 'black' };
-            default: return { muiColor: 'default' };
-        }
-    };
-
-
-
-
-    const getBillableChip = (isBillable) => {
-        const value = (isBillable ?? '').toString().trim().toLowerCase();
-
-        const isBillableText = value === 'yes';
-
-        return (
-            <Chip
-                label={isBillableText ? 'Billable' : 'Non-Billable'}
-                color={isBillableText ? 'success' : 'default'}
-                size="small"
-            />
-        );
-    };
-
-
-
-    const formatDate = (dateString) => {
-        if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString();
-    };
-
-    const truncateText = (text, maxLength = 30) => {
-        if (!text) return '-';
-        if (text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + '...';
-    };
-
-    const formatNumber = (number) => {
-        if (number === null || number === undefined) return '-';
-        return number.toString();
-    };
-
-    // Column selection handlers
-    const handleOpenColumnMenu = (event) => {
-        setColumnMenuAnchor(event.currentTarget);
-    };
-
-    const handleCloseColumnMenu = () => {
-        setColumnMenuAnchor(null);
-    };
-
-    const handleToggleColumn = (columnKey) => {
-        setVisibleColumns(prev => ({
-            ...prev,
-            [columnKey]: !prev[columnKey]
-        }));
-    };
-
-    const handleSelectAllColumns = () => {
-        const allTrue = Object.keys(visibleColumns).reduce((acc, key) => {
-            acc[key] = true;
-            return acc;
-        }, {});
-        setVisibleColumns(allTrue);
-    };
-
-    const handleDeselectAllColumns = () => {
-        const allFalse = Object.keys(visibleColumns).reduce((acc, key) => {
-            acc[key] = false;
-            return acc;
-        }, {});
-        // Keep at least one column visible
-        allFalse.pocId = true;
-        setVisibleColumns(allFalse);
-    };
-
-
-
-    // Add this state for editing status
+    // Status editing state
     const [editingStatus, setEditingStatus] = React.useState(null);
     const [statusMenuAnchor, setStatusMenuAnchor] = React.useState(null);
+
+    // Remark editing state
+    const [editingRemark, setEditingRemark] = React.useState(null);
+    const [remarkText, setRemarkText] = React.useState('');
 
     // Status options
     const statusOptions = ['Draft', 'Pending', 'In Progress', 'Completed', 'Converted', 'Dropped', 'Awaiting', 'Hold', 'Closed', 'Live'];
 
+    // Debounce search term
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 300);
 
-    // Function to handle status change
-    const handleStatusChange = async (poc, newStatus) => {
-        try {
-            const token = localStorage.getItem('authToken');
-            await axios.put(`http://localhost:5050/poc/updateStatus/${poc.pocId}`,
-                { status: newStatus },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-            // Update local state
-            setPocData(prevData =>
-                prevData.map(item =>
-                    item.pocId === poc.pocId ? { ...item, status: newStatus } : item
-                )
-            );
-
-            showSnackbar(`Status updated to ${newStatus}`, 'success');
-        } catch (error) {
-            console.error('Error updating status:', error);
-            showSnackbar('Failed to update status', 'error');
-        } finally {
-            setEditingStatus(null);
-            setStatusMenuAnchor(null);
+    // Load column preferences
+    React.useEffect(() => {
+        const savedColumns = localStorage.getItem('pocTableColumns');
+        if (savedColumns) {
+            try {
+                setVisibleColumns(JSON.parse(savedColumns));
+            } catch (error) {
+                console.error('Error loading column preferences:', error);
+            }
         }
-    };
+    }, []);
 
-    // Open status menu
-    const handleOpenStatusMenu = (event, poc) => {
-        setEditingStatus(poc);
-        setStatusMenuAnchor(event.currentTarget);
-    };
+    // Save column preferences with debounce
+    React.useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            try {
+                localStorage.setItem('pocTableColumns', JSON.stringify(visibleColumns));
+            } catch (error) {
+                console.error('Error saving column preferences:', error);
+            }
+        }, 500);
 
-    // Close status menu
-    const handleCloseStatusMenu = () => {
-        setEditingStatus(null);
-        setStatusMenuAnchor(null);
-    };
+        return () => clearTimeout(timeoutId);
+    }, [visibleColumns]);
 
-
-
-    // Update the status column configuration in columnConfig
-    const columnConfig = {
+    // Memoized column configuration
+    const columnConfig = React.useMemo(() => ({
         pocId: {
-            label: 'Usecase ID',
+            label: 'ID',
             truncate: false,
             render: (poc) => (
                 <Link
@@ -793,8 +403,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Link>
             )
         },
+        pocType: { label: 'Type', truncate: 15 },
         entityName: { label: 'Company Name', truncate: 15 },
-        partnerName: { label: 'Partner Name', truncate: 20 },
         pocName: { label: 'Usecase Name', truncate: 20 },
         assignedTo: { label: 'Assigned To', truncate: false },
         startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
@@ -811,11 +421,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 const totalHours = parseFloat(hours);
                 if (isNaN(totalHours)) return '-';
 
-                // Convert to hours and minutes
                 const wholeHours = Math.floor(totalHours);
                 const minutes = Math.round((totalHours - wholeHours) * 60);
-
-                // Format as HH:MM
                 return `${wholeHours}:${minutes.toString().padStart(2, '0')}`;
             }
         },
@@ -824,14 +431,13 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             truncate: false,
             render: (poc) => {
                 const { muiColor, customColor, textColor } = getStatusColor(poc.status);
-
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Chip
                             label={poc.status || 'Draft'}
                             size="small"
                             onClick={(e) => handleOpenStatusMenu(e, poc)}
-                            color={muiColor} // only applies if defined
+                            color={muiColor}
                             sx={{
                                 ...(customColor && { backgroundColor: customColor, color: textColor || '#fff' }),
                                 cursor: 'pointer',
@@ -839,13 +445,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             }}
                         />
                     </Box>
-                )
-
+                );
             }
-
-
-
-
         },
         remark: {
             label: 'Remark',
@@ -897,18 +498,17 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 )
             )
         },
-        entityType: { label: 'Client Type', truncate: false },
 
+        entityType: { label: 'Client Type', truncate: false },
         salesPerson: { label: 'Sales Person', truncate: false },
         region: { label: 'Region', truncate: false },
-        isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
-        pocType: { label: 'Usecase Type', truncate: false },
+
+
         description: { label: 'Description', truncate: 25 },
         spocEmail: { label: 'SPOC Email', truncate: 20 },
         spocDesignation: { label: 'SPOC Designation', truncate: false },
         tags: { label: 'Tags', truncate: 15 },
         createdBy: { label: 'Created By', truncate: false },
-
         estimatedEfforts: {
             label: 'Estimated Efforts',
             truncate: false,
@@ -922,7 +522,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             )
         },
         approvedBy: { label: 'Approved By', truncate: false },
-
         totalEfforts: {
             label: 'Total Efforts',
             truncate: false,
@@ -935,30 +534,410 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Typography>
             )
         },
-        varianceDays: {
-            label: 'Variance Days',
-            truncate: false,
-            render: (poc) => (
-                <Typography variant="body2">
-                    {poc.varianceDays !== null && poc.varianceDays !== undefined
-                        ? `${Math.round(parseFloat(poc.varianceDays))} days`
-                        : '-'
-                    }
-                </Typography>
-            )
-        },
 
-    };
+    }), [theme, editingRemark, remarkText]);
+
+    // Optimized event handlers
+    const handleOpen = React.useCallback(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+        setOpen(true);
+    }, [handleAutoLogout]);
+
+    const handleClose = React.useCallback(() => {
+        setOpen(false);
+        validateToken();
+    }, []);
+
+    const handleEditOpen = React.useCallback((poc) => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+        setPocToEdit(poc);
+        setEditOpen(true);
+    }, [handleAutoLogout]);
 
 
-    const [editingRemark, setEditingRemark] = React.useState(null);
-    const [remarkText, setRemarkText] = React.useState('');
+    const handleEditClose = React.useCallback(() => {
+        setEditOpen(false);
+        setPocToEdit(null);
+        validateToken();
+    }, []);
+    const filteredData = React.useMemo(() => {
+        if (!pocData.length) return [];
 
-    // Function to handle remark update
-    const handleRemarkUpdate = async (poc, newRemark) => {
+        return pocData.filter(poc => {
+            // Global search filter with debounced term
+            const matchesGlobalSearch =
+                !debouncedSearchTerm ||
+                Object.keys(poc).some(key => {
+                    const value = poc[key];
+                    return value &&
+                        value.toString().toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+                });
+
+            // Column filters
+            const matchesColumnFilters = Object.entries(columnFilters).every(([column, filterValue]) => {
+                if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0)) return true;
+
+                const pocValue = poc[column];
+                if (pocValue === null || pocValue === undefined) return false;
+
+                if (column === 'status' && Array.isArray(filterValue)) {
+                    return filterValue.includes(pocValue);
+                }
+
+                if (column === 'isBillable') {
+                    if (filterValue === 'true') return pocValue === true;
+                    if (filterValue === 'false') return pocValue === false;
+                    return true;
+                }
+
+                if (column.includes('Date') && pocValue) {
+                    const date = new Date(pocValue).toLocaleDateString();
+                    return date.includes(filterValue);
+                }
+
+                return pocValue.toString().toLowerCase().includes(filterValue.toLowerCase());
+            });
+
+            return matchesGlobalSearch && matchesColumnFilters;
+        });
+    }, [pocData, debouncedSearchTerm, columnFilters]);
+    const handleRowSelect = React.useCallback((pocId) => {
+        setRowSelection(prev => ({
+            ...prev,
+            [pocId]: !prev[pocId]
+        }));
+    }, []);
+    const paginatedData = React.useMemo(() => {
+        return filteredData.slice(
+            page * rowsPerPage,
+            page * rowsPerPage + rowsPerPage
+        );
+    }, [filteredData, page, rowsPerPage]);
+
+    const handleSelectAllOnPage = React.useCallback(() => {
+        const allSelectedOnPage = paginatedData.every(poc => rowSelection[poc.pocId]);
+        const newSelection = { ...rowSelection };
+
+        if (allSelectedOnPage) {
+            paginatedData.forEach(poc => {
+                delete newSelection[poc.pocId];
+            });
+        } else {
+            paginatedData.forEach(poc => {
+                newSelection[poc.pocId] = true;
+            });
+        }
+        setRowSelection(newSelection);
+    }, [paginatedData, rowSelection]);
+
+    const handleDeselectAll = React.useCallback(() => {
+        setRowSelection({});
+    }, []);
+
+    const getSelectedRows = React.useCallback(() => {
+        return pocData.filter(poc => rowSelection[poc.pocId]);
+    }, [pocData, rowSelection]);
+
+    const handleChangePage = React.useCallback((event, newPage) => {
+        setPage(newPage);
+    }, []);
+
+    const handleChangeRowsPerPage = React.useCallback((event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    }, []);
+
+    const handleColumnFilterChange = React.useCallback((column, value) => {
+        setColumnFilters(prev => ({
+            ...prev,
+            [column]: value
+        }));
+        setPage(0);
+    }, []);
+
+    const handleClearColumnFilter = React.useCallback((column) => {
+        if (column === 'status') {
+            handleColumnFilterChange(column, []);
+        } else {
+            handleColumnFilterChange(column, '');
+        }
+    }, [handleColumnFilterChange]);
+
+    const handleClearAllFilters = React.useCallback(() => {
+        const clearedFilters = Object.keys(columnFilters).reduce((acc, key) => {
+            acc[key] = key === 'status' ? [] : '';
+            return acc;
+        }, {});
+        setColumnFilters(clearedFilters);
+        setSearchTerm('');
+    }, [columnFilters]);
+
+    const handleOpenFilterPopover = React.useCallback((event, column) => {
+        setFilterAnchorEl(event.currentTarget);
+        setCurrentFilterColumn(column);
+    }, []);
+
+    const handleCloseFilterPopover = React.useCallback(() => {
+        setFilterAnchorEl(null);
+        setCurrentFilterColumn('');
+    }, []);
+
+    const handleOpenExportMenu = React.useCallback((event) => {
+        setExportMenuAnchor(event.currentTarget);
+    }, []);
+
+    const handleCloseExportMenu = React.useCallback(() => {
+        setExportMenuAnchor(null);
+    }, []);
+
+    const handleOpenColumnMenu = React.useCallback((event) => {
+        setColumnMenuAnchor(event.currentTarget);
+    }, []);
+
+    const handleCloseColumnMenu = React.useCallback(() => {
+        setColumnMenuAnchor(null);
+    }, []);
+
+    const handleToggleColumn = React.useCallback((columnKey) => {
+        setVisibleColumns(prev => ({
+            ...prev,
+            [columnKey]: !prev[columnKey]
+        }));
+    }, []);
+
+    const handleSelectAllColumns = React.useCallback(() => {
+        const allTrue = Object.keys(visibleColumns).reduce((acc, key) => {
+            acc[key] = true;
+            return acc;
+        }, {});
+        setVisibleColumns(allTrue);
+    }, [visibleColumns]);
+
+    const handleDeselectAllColumns = React.useCallback(() => {
+        const allFalse = Object.keys(visibleColumns).reduce((acc, key) => {
+            acc[key] = false;
+            return acc;
+        }, {});
+        allFalse.pocId = true;
+        setVisibleColumns(allFalse);
+    }, [visibleColumns]);
+
+    const handleOpenStatusMenu = React.useCallback((event, poc) => {
+        setEditingStatus(poc);
+        setStatusMenuAnchor(event.currentTarget);
+    }, []);
+
+    const handleCloseStatusMenu = React.useCallback(() => {
+        setEditingStatus(null);
+        setStatusMenuAnchor(null);
+    }, []);
+
+    const handleStartEditRemark = React.useCallback((poc) => {
+        setEditingRemark(poc);
+        setRemarkText(poc.remark || '');
+    }, []);
+
+    const handleCancelEditRemark = React.useCallback(() => {
+        setEditingRemark(null);
+        setRemarkText('');
+    }, []);
+
+    const handleViewDetails = React.useCallback((poc) => {
+        const token = localStorage.getItem('authToken');
+
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+        setSelectedPoc(poc);
+        setDetailDialogOpen(true); // ✅ CORRECT
+    }, [handleAutoLogout]);
+
+
+
+
+    const handleCloseDetails = React.useCallback(() => {
+        setDetailDialogOpen(false);
+        setSelectedPoc(null);
+    }, []);
+
+    const handleDeleteClick = React.useCallback((poc) => {
+        const token = localStorage.getItem('authToken');
+
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+        setPocToDelete(poc);
+        setDeleteConfirmOpen(true);
+    }, [handleAutoLogout]);
+
+
+    // Fetch POC data with optimization
+    const fetchPocData = React.useCallback(async () => {
+        try {
+            setLoading(true);
+            const token = localStorage.getItem('authToken');
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sales/all`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            // Optimized sorting
+            const sortedData = response.data.sort((a, b) => {
+                const getTimestamp = (item) => {
+                    return new Date(
+                        item.updatedAt ||
+                        item.createdAt ||
+                        item.startDate ||
+                        0
+                    ).getTime();
+                };
+                return getTimestamp(b) - getTimestamp(a);
+            });
+
+            setPocData(sortedData);
+        } catch (error) {
+            console.error('Error fetching Usecase data:', error);
+            showSnackbar('Failed to fetch Usecase data', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // Initial data fetch
+    React.useEffect(() => {
+        fetchPocData();
+    }, [fetchPocData]);
+
+    // Memoized filtered data calculation
+
+
+    // Memoized paginated data
+
+    // Helper functions
+    const validateToken = React.useCallback(async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
+
+        try {
+            await axios.get(`${import.meta.env.VITE_API}/poc/api/auth/validate`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (error) {
+            if (error.response?.status === 401) {
+                handleLogout();
+            }
+        }
+    }, []);
+
+
+
+    const showSnackbar = React.useCallback((message, severity) => {
+        setSnackbar({ open: true, message, severity });
+    }, []);
+
+    const handleCloseSnackbar = React.useCallback(() => {
+        setSnackbar(prev => ({ ...prev, open: false }));
+    }, []);
+
+    const handleDeleteConfirm = React.useCallback(async () => {
+        if (!pocToDelete) return;
+
         try {
             const token = localStorage.getItem('authToken');
-            await axios.put(`http://localhost:5050/poc/updateRemark/${poc.pocId}`,
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
+            await axios.delete(`${import.meta.env.VITE_API}/poc/sales/delete/${pocToDelete.pocId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            setPocData(prevData => prevData.filter(item => item.pocId !== pocToDelete.pocId));
+            showSnackbar('Usecase record deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting Usecase:', error);
+            showSnackbar('Failed to delete Usecase record', 'error');
+        } finally {
+            setDeleteConfirmOpen(false);
+            setPocToDelete(null);
+        }
+    }, [pocToDelete, showSnackbar]);
+
+    const handleDeleteCancel = React.useCallback(() => {
+        setDeleteConfirmOpen(false);
+        setPocToDelete(null);
+    }, []);
+
+    const handleStatusChange = React.useCallback(async (poc, newStatus) => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
+            await axios.put(`${import.meta.env.VITE_API}/poc/sales/updateStatus/${poc.pocId}`,
+                { status: newStatus },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            setPocData(prevData =>
+                prevData.map(item =>
+                    item.pocId === poc.pocId ? { ...item, status: newStatus } : item
+                )
+            );
+
+            showSnackbar(`Status updated to ${newStatus}`, 'success');
+        } catch (error) {
+            console.error('Error updating status:', error);
+            showSnackbar('Failed to update status', 'error');
+        } finally {
+            setEditingStatus(null);
+            setStatusMenuAnchor(null);
+        }
+    }, [showSnackbar]);
+
+    const handleRemarkUpdate = React.useCallback(async (poc, newRemark) => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
+            await axios.put(`${import.meta.env.VITE_API}/poc/sales/updateRemark/${poc.pocId}`,
                 { remark: newRemark },
                 {
                     headers: {
@@ -968,7 +947,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 }
             );
 
-            // Update local state
             setPocData(prevData =>
                 prevData.map(item =>
                     item.pocId === poc.pocId ? { ...item, remark: newRemark } : item
@@ -982,35 +960,171 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             console.error('Error updating remark:', error);
             showSnackbar('Failed to update remark', 'error');
         }
-    };
+    }, [showSnackbar]);
 
-    // Function to start editing remark
-    const handleStartEditRemark = (poc) => {
-        setEditingRemark(poc);
-        setRemarkText(poc.remark || '');
-    };
+    // Export functions
+    const exportToCSV = React.useCallback((data, filename) => {
+        if (!data || data.length === 0) return;
 
-    // Function to cancel editing remark
-    const handleCancelEditRemark = () => {
-        setEditingRemark(null);
-        setRemarkText('');
-    };
+        const columnsToExport = Object.entries(columnConfig);
+        const headers = columnsToExport.map(([key, config]) => config.label);
 
+        const csvData = data.map(poc => {
+            return columnsToExport.map(([key, config]) => {
+                let value = poc[key];
+
+                if (config.render) {
+                    if (key === 'status') {
+                        return poc.status || 'Draft';
+                    } else if (key === 'isBillable') {
+                        return poc.isBillable === true || poc.isBillable === 'Yes' ? 'Yes' : 'No';
+                    } else if (key === 'remark') {
+                        return poc.remark || '';
+                    } else if (key === 'pocId') {
+                        return poc.pocId;
+                    } else if (key === 'totalWorkedHours') {
+                        const hours = poc.totalWorkedHours;
+                        if (hours === null || hours === undefined || hours === '') return '';
+                        const totalHours = parseFloat(hours);
+                        if (isNaN(totalHours)) return '';
+                        const wholeHours = Math.floor(totalHours);
+                        const minutes = Math.round((totalHours - wholeHours) * 60);
+                        return `${wholeHours}:${minutes.toString().padStart(2, '0')}`;
+                    }
+                }
+
+                if (key.includes('Date') && value) {
+                    return formatDate(value);
+                }
+
+                if (value === null || value === undefined) return '';
+                return value.toString();
+            });
+        });
+
+        const csvContent = [
+            headers,
+            ...csvData
+        ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }, [columnConfig]);
+
+    const handleExportSelected = React.useCallback(() => {
+        const selectedRows = getSelectedRows();
+        if (selectedRows.length === 0) {
+            showSnackbar('No rows selected for export', 'warning');
+            return;
+        }
+        exportToCSV(selectedRows, `selected-usecases-${new Date().toISOString().split('T')[0]}.csv`);
+        setExportMenuAnchor(null);
+        showSnackbar(`Exported ${selectedRows.length} rows to CSV with all columns`, 'success');
+    }, [getSelectedRows, exportToCSV, showSnackbar]);
+
+    const handleExportAll = React.useCallback(() => {
+        exportToCSV(filteredData, `all-usecases-${new Date().toISOString().split('T')[0]}.csv`);
+        setExportMenuAnchor(null);
+        showSnackbar(`Exported all ${filteredData.length} rows to CSV with all columns`, 'success');
+    }, [filteredData, exportToCSV, showSnackbar]);
+
+    const handleExportPage = React.useCallback(() => {
+        exportToCSV(paginatedData, `page-usecases-${new Date().toISOString().split('T')[0]}.csv`);
+        setExportMenuAnchor(null);
+        showSnackbar(`Exported page ${page + 1} rows to CSV with all columns`, 'success');
+    }, [paginatedData, exportToCSV, page, showSnackbar]);
+
+    // Utility functions
+    const getStatusColor = React.useCallback((status) => {
+        switch (status?.toLowerCase()) {
+            case 'completed': return { muiColor: 'success' };
+            case 'in progress': return { muiColor: 'warning' };
+            case 'pending': return { muiColor: 'secondary' };
+            case 'dropped': return { muiColor: 'error' };
+            case 'draft': return { muiColor: 'default' };
+            case 'awaiting': return { muiColor: 'info' };
+            case 'hold': return { customColor: 'yellow', textColor: 'black' };
+            case 'closed': return { customColor: 'cyan', textColor: 'black' };
+            case 'converted': return { customColor: 'lawngreen', textColor: 'black' };
+            case 'live': return { customColor: 'Lime', textColor: 'black' };
+            default: return { muiColor: 'default' };
+        }
+    }, []);
+
+    const getBillableChip = React.useCallback((isBillable) => {
+        return (
+            <Chip
+                label={isBillable ? 'Billable' : 'Non-Billable'}
+                color={isBillable ? 'success' : 'default'}
+                size="small"
+            />
+        );
+    }, []);
+
+    const formatDate = React.useCallback((dateString) => {
+        if (!dateString) return '-';
+        return new Date(dateString).toLocaleDateString();
+    }, []);
+
+    const truncateText = React.useCallback((text, maxLength = 30) => {
+        if (!text) return '-';
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    }, []);
+
+    const getUniqueValues = React.useCallback((column) => {
+        return [...new Set(pocData
+            .map(item => item[column])
+            .filter(value => value !== undefined && value !== null && value !== '')
+        )].sort();
+    }, [pocData]);
+
+    const hasActiveFilters = React.useCallback(() => {
+        return searchTerm || Object.values(columnFilters).some(value =>
+            (Array.isArray(value) && value.length > 0) ||
+            (!Array.isArray(value) && value !== '')
+        );
+    }, [searchTerm, columnFilters]);
+
+    const hasSelectedRows = Object.keys(rowSelection).some(key => rowSelection[key]);
+
+    const themeNew = React.useMemo(() => createTheme({
+        palette: {
+            yellow: {
+                main: yellowColor[500],
+                light: yellowColor[300],
+                dark: yellowColor[700],
+                contrastText: '#000',
+            },
+        },
+    }), []);
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <Box
+            sx={{
+                pointerEvents: logoutInProgress.current ? 'none' : 'auto',
+                opacity: logoutInProgress.current ? 0.6 : 1
+            }}
+        >
             {/* App Bar */}
             <AppBar position="static" elevation={1} sx={{ bgcolor: theme.palette.primary.main }}>
                 <Toolbar>
-
                     <Button
                         color="inherit"
-                        onClick={() => onNavigate('dashboard')}
+                        onClick={() => safeNavigate('dashboard')}
                         startIcon={<DashboardIcon />}
                         sx={{ mr: 2 }}
                     >
                         Dashboard
                     </Button>
+
 
                     <Typography
                         component="h1"
@@ -1049,7 +1163,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                         </Typography>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-
                             <TextField
                                 placeholder="Search Usecase codes..."
                                 variant="outlined"
@@ -1126,7 +1239,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                     <Table stickyHeader aria-label="poc table" size="small" sx={{ minWidth: 1000 }}>
                                         <TableHead>
                                             <TableRow>
-                                                {/* Selection column */}
                                                 <TableCell padding="checkbox" sx={{
                                                     backgroundColor: '#1976d2',
                                                     color: 'white',
@@ -1139,7 +1251,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                         onChange={handleSelectAllOnPage}
                                                         sx={{
                                                             cursor: 'pointer',
-                                                            color: 'white', // Make checkbox white
+                                                            color: 'white',
                                                             '&.Mui-checked': {
                                                                 color: 'white',
                                                             }
@@ -1176,7 +1288,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                                 </IconButton>
                                                             </Box>
 
-                                                            {/* Show filter chip only when filter is applied */}
                                                             {columnFilters[key] &&
                                                                 (Array.isArray(columnFilters[key]) ?
                                                                     columnFilters[key].length > 0 :
@@ -1187,12 +1298,11 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                                             display: 'flex',
                                                                             flexWrap: 'wrap',
                                                                             gap: 0.5,
-                                                                            maxHeight: 48, // ⬅️ fixed height for header cell content
-                                                                            overflowY: 'auto', // ⬅️ scroll if many chips
+                                                                            maxHeight: 48,
+                                                                            overflowY: 'auto',
                                                                         }}
                                                                     >
                                                                         {Array.isArray(columnFilters[key]) ? (
-                                                                            // For status (array), show individual chips for each selected status
                                                                             columnFilters[key].map((statusValue) => (
                                                                                 <Chip
                                                                                     key={statusValue}
@@ -1211,7 +1321,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                                                 />
                                                                             ))
                                                                         ) : (
-                                                                            // For other filters (string), show single chip
                                                                             <Chip
                                                                                 label={columnFilters[key]}
                                                                                 size="small"
@@ -1224,7 +1333,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                                         )}
                                                                     </Box>
                                                                 )}
-
                                                         </TableCell>
                                                     )
                                                 )}
@@ -1251,86 +1359,32 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                 </TableRow>
                                             ) : (
                                                 paginatedData.map((poc) => (
-                                                    <TableRow
+                                                    <TableRowMemo
                                                         key={poc.pocId}
-                                                        hover
-                                                        selected={rowSelection[poc.pocId]}
-                                                        sx={{
-                                                            '&:nth-of-type(even)': {
-                                                                bgcolor: alpha(theme.palette.primary.main, 0.02)
-                                                            },
-                                                            '&.Mui-selected': {
-                                                                bgcolor: alpha(theme.palette.primary.main, 0.1)
-                                                            }
-                                                        }}
-                                                    >
-                                                        {/* Selection checkbox */}
-                                                        <TableCell padding="checkbox">
-                                                            <Checkbox
-                                                                size="small"
-                                                                checked={!!rowSelection[poc.pocId]}
-                                                                onChange={() => handleRowSelect(poc.pocId)}
-                                                                sx={{ cursor: 'pointer' }}
-                                                            />
-                                                        </TableCell>
-
-                                                        {Object.entries(columnConfig).map(([key, config]) =>
-                                                            visibleColumns[key] && (
-                                                                <TableCell key={key} sx={{ whiteSpace: 'nowrap' }}>
-                                                                    {config.render ? (
-                                                                        config.render(poc)
-                                                                    ) : (
-                                                                        <Tooltip title={poc[key] || '-'}>
-                                                                            <span>
-                                                                                {config.truncate ?
-                                                                                    truncateText(poc[key], config.truncate) :
-                                                                                    (poc[key] || '-')
-                                                                                }
-                                                                            </span>
-                                                                        </Tooltip>
-                                                                    )}
-                                                                </TableCell>
-                                                            )
-                                                        )}
-                                                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                                            <Tooltip title="View Details">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    color="primary"
-                                                                    onClick={() => handleViewDetails(poc)}
-                                                                    sx={{ mr: 0.5 }}
-                                                                >
-                                                                    <VisibilityIcon />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                            <Tooltip title="Edit">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    color="secondary"
-                                                                    onClick={() => handleEditOpen(poc)}
-                                                                    sx={{ mr: 0.5 }}
-                                                                >
-                                                                    <EditIcon />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                            <Tooltip title="Delete">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    color="error"
-                                                                    onClick={() => handleDeleteClick(poc)}
-                                                                >
-                                                                    <DeleteIcon />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                        </TableCell>
-                                                    </TableRow>
+                                                        poc={poc}
+                                                        visibleColumns={visibleColumns}
+                                                        columnConfig={columnConfig}
+                                                        rowSelection={rowSelection}
+                                                        theme={theme}
+                                                        handleRowSelect={handleRowSelect}
+                                                        handleViewDetails={handleViewDetails}
+                                                        handleEditOpen={handleEditOpen}
+                                                        handleDeleteClick={handleDeleteClick}
+                                                        editingRemark={editingRemark}
+                                                        remarkText={remarkText}
+                                                        handleStartEditRemark={handleStartEditRemark}
+                                                        handleRemarkUpdate={handleRemarkUpdate}
+                                                        handleCancelEditRemark={handleCancelEditRemark}
+                                                        truncateText={truncateText}
+                                                        formatDate={formatDate}
+                                                        handleOpenStatusMenu={handleOpenStatusMenu}
+                                                        getStatusColor={getStatusColor}
+                                                    />
                                                 ))
                                             )}
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
-
-
 
                                 {/* Pagination */}
                                 <Box sx={{
@@ -1361,6 +1415,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Card>
             </Box>
 
+            {/* Export Menu */}
             <Menu
                 anchorEl={exportMenuAnchor}
                 open={Boolean(exportMenuAnchor)}
@@ -1394,7 +1449,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 )}
             </Menu>
 
-
             {/* Column Selection Menu */}
             <Menu
                 anchorEl={columnMenuAnchor}
@@ -1422,7 +1476,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 ))}
             </Menu>
 
-            {/* Filter Popover */}
             {/* Filter Popover */}
             <Popover
                 open={Boolean(filterAnchorEl)}
@@ -1453,7 +1506,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                 renderValue={(selected) => selected.length === 0 ? 'All Statuses' : selected.join(', ')}
                             >
                                 {getUniqueValues('status')
-                                    .filter(value => value && value.trim() !== '') // ⬅️ remove empty status
+                                    .filter(value => value && value.trim() !== '')
                                     .map(value => (
                                         <MenuItem key={value} value={value}>
                                             <Checkbox checked={columnFilters.status.indexOf(value) > -1} />
@@ -1535,12 +1588,10 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             />
                         </MenuItem>
                     );
-                }
-                )}
+                })}
             </Menu>
 
-
-            {/* Modal for PocPrjId */}
+            {/* Modals and Dialogs */}
             <Dialog
                 open={open}
                 onClose={handleClose}
@@ -1548,12 +1599,11 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 fullWidth
             >
                 <DialogContent dividers>
-                    <PocPrjId
+                    <SalesPrjId
                         onClose={handleClose}
                         onSuccess={() => {
                             handleClose();
-                            setPage(0); // Reset to first page
-                            // Remove the setTimeout and call fetchPocData directly
+                            setPage(0);
                             fetchPocData();
                             showSnackbar('Usecase record created successfully', 'success');
                         }}
@@ -1561,6 +1611,26 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </DialogContent>
             </Dialog>
 
+            {/* Edit Modal */}
+            <Dialog
+                open={editOpen}
+                onClose={handleEditClose}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogContent dividers>
+                    <SalesPrjIdEdit
+                        poc={pocToEdit}
+                        onClose={handleEditClose}
+                        onSuccess={() => {
+                            handleEditClose();
+                            setPage(0);
+                            fetchPocData();
+                            showSnackbar('Usecase record updated successfully', 'success');
+                        }}
+                    />
+                </DialogContent>
+            </Dialog>
 
             {/* Detail Dialog */}
             <Dialog
@@ -1602,22 +1672,15 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Client Type" value={selectedPoc.entityType} />
                             <DetailItem label="Usecase Type" value={selectedPoc.pocType} />
                             <DetailItem label="Company Name" value={selectedPoc.entityName} />
-                            <DetailItem
-                                label="Partner Name"
-                                value={selectedPoc.partnerName || '-'}
-                            />
-
                             <DetailItem label="Sales Person" value={selectedPoc.salesPerson} />
                             <DetailItem label="Region" value={selectedPoc.region} />
                             <DetailItem label="SPOC Email" value={selectedPoc.spocEmail || '-'} />
                             <DetailItem label="SPOC Designation" value={selectedPoc.spocDesignation || '-'} />
-                            {/* <DetailItem label="Billable" value={selectedPoc.isBillable ? 'Yes' : 'No'} /> */}
                             <DetailItem
                                 label="Billable"
                                 value={
-                                    (selectedPoc.isBillable ?? '').toString().trim().toLowerCase() === 'yes'
-                                        ? 'Yes'
-                                        : 'No'
+                                    selectedPoc.isBillable === null ? 'Not Specified' :
+                                        (selectedPoc.isBillable === true || selectedPoc.isBillable === 'Yes' ? 'Yes' : 'No')
                                 }
                             />
                             <DetailItem label="Tags" value={selectedPoc.tags || '-'} />
@@ -1627,7 +1690,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="End Date" value={formatDate(selectedPoc.endDate)} />
                             <DetailItem label="Actual Start Date" value={formatDate(selectedPoc.actualStartDate)} />
                             <DetailItem label="Actual End Date" value={formatDate(selectedPoc.actualEndDate)} />
-
                             <DetailItem
                                 label="Estimated Efforts"
                                 value={
@@ -1645,14 +1707,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                         : '-'
                                 }
                             />
-                            <DetailItem
-                                label="Variance Days"
-                                value={
-                                    selectedPoc.varianceDays !== null && selectedPoc.varianceDays !== undefined
-                                        ? `${Math.round(parseFloat(selectedPoc.varianceDays))} days`
-                                        : '-'
-                                }
-                            />
+
                             <DetailItem
                                 label="Worked Hours"
                                 value={selectedPoc.totalWorkedHours ? parseFloat(selectedPoc.totalWorkedHours).toFixed(2) : '-'}
@@ -1706,28 +1761,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </DialogActions>
             </Dialog>
 
-            {/* Modal for PocPrjIdEdit */}
-            <Dialog
-                open={editOpen}
-                onClose={handleEditClose}
-                maxWidth="lg"
-                fullWidth
-            >
-                <DialogContent dividers>
-                    <PocPrjIdEdit
-                        poc={pocToEdit}
-                        onClose={handleEditClose}
-                        onSuccess={() => {
-                            handleEditClose();
-                            setPage(0); // Reset to first page
-                            // Remove the setTimeout and call fetchPocData directly
-                            fetchPocData();
-                            showSnackbar('Usecase record updated successfully', 'success');
-                        }}
-                    />
-                </DialogContent>
-            </Dialog>
-
             {/* Delete Confirmation Dialog */}
             <Dialog open={deleteConfirmOpen} onClose={handleDeleteCancel}>
                 <DialogTitle>Confirm Delete</DialogTitle>
@@ -1747,7 +1780,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </DialogActions>
             </Dialog>
 
-            {/* Snackbar for notifications */}
+            {/* Snackbar */}
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={3000}
@@ -1762,24 +1795,4 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
     );
 };
 
-
-// Updated DetailItem component
-const DetailItem = ({ label, value, render }) => (
-    <Box sx={{ mb: 1 }}>
-        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            {label}:
-        </Typography>
-        {render ? (
-            render(value)
-        ) : (
-            <Typography variant="body1">
-                {value || '-'}
-            </Typography>
-        )}
-    </Box>
-);
-
-
-
-
-export default PocTable;
+export default React.memo(SalesTable);
