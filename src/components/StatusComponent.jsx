@@ -3377,4 +3377,5 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     }
 };
 
+
 export default StatusComponent;
