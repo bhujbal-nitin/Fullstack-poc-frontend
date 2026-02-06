@@ -635,3 +635,19 @@
   }
 }
 
+.knowledge-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px solid #dee2e6;
+}
+
+.knowledge-card:hover {
+  background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+  border-color: #4a6cf7;
+  transform: translateY(-5px);
+}
+
+.icon-knowledge {
+  color: #4a6cf7;
+  font-size: 32px !important;
+}
+
