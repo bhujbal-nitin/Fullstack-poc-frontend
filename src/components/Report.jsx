@@ -3,6 +3,7 @@ import axios from "axios";
 import { Bar, Doughnut, Line, Pie } from "react-chartjs-2";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import 'chartjs-plugin-datalabels';
+import EmployeeReport from './EmployeeReport'; // Adjust path as needed
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -161,6 +162,108 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
   const [salesPersonChartData, setSalesPersonChartData] = useState(null);
 
+  // Add with other useState declarations:
+  const [showEmployeeReport, setShowEmployeeReport] = useState(false);
+
+  // Add these state variables at the top with other useState declarations (around line 120-130)
+  const logoutInProgress = React.useRef(false);
+  const lastActivity = React.useRef(Date.now());
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
+  // Token expiry check
+  const isTokenExpired = React.useCallback((token) => {
+    if (!token) return true;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp * 1000 < Date.now();
+    } catch {
+      return true;
+    }
+  }, []);
+
+  // Auto logout handler
+  const handleAutoLogout = React.useCallback(() => {
+    if (logoutInProgress.current) return;
+    logoutInProgress.current = true;
+
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    localStorage.removeItem('refreshToken');
+
+    if (onLogout) {
+      onLogout();
+    }
+  }, [onLogout]);
+
+  // Update activity timestamp
+  const updateActivity = React.useCallback(() => {
+    lastActivity.current = Date.now();
+  }, []);
+
+  // Add these useEffect hooks after your existing useEffect (around line 280-320)
+
+  // Periodic token expiry check
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const token = localStorage.getItem('authToken');
+      if (token && isTokenExpired(token)) {
+        handleAutoLogout();
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [handleAutoLogout, isTokenExpired]);
+
+  // Inactivity tracking
+  React.useEffect(() => {
+    const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity);
+    });
+
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+        handleAutoLogout();
+      }
+    }, 60000);
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity);
+      });
+      clearInterval(interval);
+    };
+  }, [handleAutoLogout, updateActivity]);
+
+  // Session expiry check
+  React.useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+      const logoutTimer = setTimeout(() => {
+        handleAutoLogout();
+      }, timeUntilExpiry);
+
+      return () => clearTimeout(logoutTimer);
+    } catch {
+      // Handle error silently
+    }
+  }, [handleAutoLogout]);
+
+  // Add early return for logout in progress (around line 320-330)
+  // Block UI rendering when logout is in progress
+  if (logoutInProgress.current) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+      </Box>
+    );
+  }
+
 
   useEffect(() => {
     fetchInitialData();
@@ -181,26 +284,31 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("authToken");
+    if (!token || isTokenExpired(token)) {
+      handleAutoLogout();
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
       // Fetch POC types
-      const typesResponse = await axios.get("http://localhost:5050/poc/getPocTypes", {
+      const typesResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getPocTypes`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const typesData = Array.isArray(typesResponse.data) ? typesResponse.data : [];
       setPocTypes(typesData);
 
       // Fetch status types
-      const statusResponse = await axios.get("http://localhost:5050/poc/getStatusTypes", {
+      const statusResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getStatusTypes`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const statusData = Array.isArray(statusResponse.data) ? statusResponse.data : [];
       setStatusTypes(statusData);
 
       // Fetch reports
-      const reportsResponse = await axios.get("http://localhost:5050/poc/getReports", {
+      const reportsResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getReports`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const reportsData = Array.isArray(reportsResponse.data) ? reportsResponse.data : [];
@@ -2049,7 +2157,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
             Dashboard
           </Button>
 
-          {/* <AnalyticsIcon sx={{ mr: 2, fontSize: 30 }} /> */}
           <Typography
             variant="h5"
             component="h1"
@@ -2063,32 +2170,36 @@ const Report = ({ onNavigate, onLogout, user }) => {
             🚀 Usecases Dashboard
           </Typography>
 
-          {/* Add Report buttons here */}
+          {/* All Usecase Report button */}
           <Button
             color="inherit"
             onClick={() => {
-              setPocTypeFilter(""); // Clear dropdown
+              setShowEmployeeReport(false);
+              setSalesReportActive(false); // Already there
+              setPocTypeFilter("");
               setDateRange("last365");
               setRegionFilter("");
               setStartDate("");
               setEndDate("");
-              setSalesReportActive(false);
             }}
             variant="outlined"
             startIcon={<span>📊</span>}
             sx={{
               mr: 1,
               borderColor: 'rgba(255,255,255,0.3)',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              backgroundColor: (!showEmployeeReport && !salesReportActive) ? 'rgba(255,255,255,0.2)' : 'transparent'
             }}
           >
             All Usecase Report
           </Button>
 
+          {/* Sales Report button */}
           <Button
             color="inherit"
             onClick={() => {
-              setPocTypeFilter("POC"); // Set dropdown to "POC"
+              setShowEmployeeReport(false);
+              setPocTypeFilter("POC");
               setSalesReportActive(true);
               setDateRange("last365");
               setRegionFilter("");
@@ -2100,14 +2211,35 @@ const Report = ({ onNavigate, onLogout, user }) => {
             sx={{
               mr: 1,
               borderColor: 'rgba(255,255,255,0.3)',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              backgroundColor: salesReportActive ? 'rgba(255,255,255,0.2)' : 'transparent'
             }}
           >
             Sales Report
           </Button>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {/* Employee Report button */}
+          <Button
+            color="inherit"
+            onClick={() => {
+              setShowEmployeeReport(true);
+              setSalesReportActive(false);
+              setPocTypeFilter("");
+              setDateRange("all");
+            }}
+            variant="outlined"
+            startIcon={<span>👥</span>}
+            sx={{
+              mr: 1,
+              borderColor: 'rgba(255,255,255,0.3)',
+              fontWeight: 'bold',
+              backgroundColor: showEmployeeReport ? 'rgba(255,255,255,0.2)' : 'transparent'
+            }}
+          >
+            Employee Report
+          </Button>
 
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Chip
               label={`👋 Welcome, ${user?.emp_name || user?.email_id || 'User'} (${user.emp_id})`}
               variant="outlined"
@@ -2126,456 +2258,464 @@ const Report = ({ onNavigate, onLogout, user }) => {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ p: isMobile ? 1 : 3 }}>
-        {/* Summary Cards - Grafana Style with Pie Chart */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* First 3 cards remain exactly as they were */}
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Total Usecases"
-              value={totalPocs}
-              icon={<DashboardIcon sx={{ fontSize: 30 }} />}
-              color="#0061ff"
-              subtitle="All active projects"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Completed"
-              value={completedIncludingConverted}
-              icon={<CheckCircleIcon sx={{ fontSize: 30 }} />}
-              color="#32a852"
-              subtitle={`${conversionRate}% conversion rate`}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="In Progress"
-              value={inProgressPocs}
-              icon={<PlayArrowIcon sx={{ fontSize: 30 }} />}
-              color="#ff9f1c"
-              subtitle="Active development"
-            />
-          </Grid>
+      <Box sx={{ p: isMobile ? 1 : 1 }}>
+        {/* Show Employee Report when active, otherwise show the regular report content */}
+        {showEmployeeReport ? (
+          // Just render the EmployeeReport component directly without any extra styling
+          <EmployeeReport
+            onNavigate={onNavigate}
+            onLogout={onLogout}
+            user={user}
+            embedded={true}
+          />
+        ) : (
+          // Original report content (All Usecase Report or Sales Report)
+          <>
+            {/* Summary Cards - Grafana Style with Pie Chart */}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              {/* First 3 cards remain exactly as they were */}
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Total Usecases"
+                  value={totalPocs}
+                  icon={<DashboardIcon sx={{ fontSize: 30 }} />}
+                  color="#0061ff"
+                  subtitle="All active projects"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="Completed"
+                  value={completedIncludingConverted}
+                  icon={<CheckCircleIcon sx={{ fontSize: 30 }} />}
+                  color="#32a852"
+                  subtitle={`${conversionRate}% conversion rate`}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <StatCard
+                  title="In Progress"
+                  value={inProgressPocs}
+                  icon={<PlayArrowIcon sx={{ fontSize: 30 }} />}
+                  color="#ff9f1c"
+                  subtitle="Active development"
+                />
+              </Grid>
 
+              {pocTypeFilter === "POC" && (
+                <Grid item xs={12} sm={6} md={3}>
+                  <StatCard
+                    title="Converted"
+                    value={getPocFilteredConvertedCount()}
+                    icon={<MonetizationOnIcon sx={{ fontSize: 30 }} />}
+                    color="#9c27b0"
+                    subtitle={
+                      `Of ${getPocFilteredCompletedCount()} completed\n` +
+                      `${getPocFilteredConversionRate()}% conversion rate`
+                    }
+                  />
+                </Grid>
+              )}
 
-          {pocTypeFilter === "POC" && (
-            <Grid item xs={12} sm={6} md={3}>
-              <StatCard
-                title="Converted"
-                value={getPocFilteredConvertedCount()}
-                icon={<MonetizationOnIcon sx={{ fontSize: 30 }} />}
-                color="#9c27b0"
-                subtitle={
-                  `Of ${getPocFilteredCompletedCount()} completed\n` +
-                  `${getPocFilteredConversionRate()}% conversion rate`
-                }
-              />
-            </Grid>
-          )}
-
-
-          {/* 4th card with pie chart - similar style to first 3 cards */}
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper elevation={3} sx={{
-              p: 2,
-              borderRadius: 3,
-              height: '100%',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '140px',
-              color: 'white'
-            }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    {filteredReports.length}
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 'medium' }}>
-                    CLIENT TYPE
-                  </Typography>
-                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                    Distribution
-                  </Typography>
-                </Box>
-                <Box sx={{
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  borderRadius: '50%',
-                  p: 1,
+              {/* 4th card with pie chart - similar style to first 3 cards */}
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper elevation={3} sx={{
+                  p: 2,
+                  borderRadius: 3,
+                  height: '100%',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  flexDirection: 'column',
+                  minHeight: '140px',
+                  color: 'white'
                 }}>
-                  <BusinessIcon sx={{ fontSize: 24 }} />
-                </Box>
-              </Box>
-              <Box sx={{
-                height: '120px',
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                {clientTypePieChartData ? (
-                  <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
-                    <Pie
-                      data={clientTypePieChartData}
-                      options={{
-                        ...clientTypePieChartOptions,
-                        plugins: {
-                          ...clientTypePieChartOptions.plugins,
-                          legend: {
-                            ...clientTypePieChartOptions.plugins.legend,
-                            display: false
-                          }
-                        }
-                      }}
-                    />
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box>
+                      <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                        {filteredReports.length}
+                      </Typography>
+                      <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 'medium' }}>
+                        CLIENT TYPE
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                        Distribution
+                      </Typography>
+                    </Box>
+                    <Box sx={{
+                      bgcolor: 'rgba(255,255,255,0.2)',
+                      borderRadius: '50%',
+                      p: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <BusinessIcon sx={{ fontSize: 24 }} />
+                    </Box>
                   </Box>
-                ) : (
-                  <Typography variant="body2" sx={{ opacity: 0.8, textAlign: 'center' }}>
-                    No client type data
-                  </Typography>
-                )}
+                  <Box sx={{
+                    height: '120px',
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}>
+                    {clientTypePieChartData ? (
+                      <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+                        <Pie
+                          data={clientTypePieChartData}
+                          options={{
+                            ...clientTypePieChartOptions,
+                            plugins: {
+                              ...clientTypePieChartOptions.plugins,
+                              legend: {
+                                ...clientTypePieChartOptions.plugins.legend,
+                                display: false
+                              }
+                            }
+                          }}
+                        />
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" sx={{ opacity: 0.8, textAlign: 'center' }}>
+                        No client type data
+                      </Typography>
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
+
+
+            {/* Chart Type Selector */}
+            <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  📈 Chart Type:
+                </Typography>
+                {['bar', 'doughnut', 'line'].map((type) => (
+                  <Chip
+                    key={type}
+                    icon={type === 'bar' ? <BarChartIcon /> : type === 'doughnut' ? <PieChartIcon /> : <TrendingUpIcon />}
+                    label={type.charAt(0).toUpperCase() + type.slice(1)}
+                    onClick={() => setChartType(type)}
+                    color={chartType === type ? 'primary' : 'default'}
+                    variant={chartType === type ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 'bold' }}
+                  />
+                ))}
               </Box>
             </Paper>
-          </Grid>
-        </Grid>
 
-        {/* Chart Type Selector */}
-        <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              📈 Chart Type:
-            </Typography>
-            {['bar', 'doughnut', 'line'].map((type) => (
-              <Chip
-                key={type}
-                icon={type === 'bar' ? <BarChartIcon /> : type === 'doughnut' ? <PieChartIcon /> : <TrendingUpIcon />}
-                label={type.charAt(0).toUpperCase() + type.slice(1)}
-                onClick={() => setChartType(type)}
-                color={chartType === type ? 'primary' : 'default'}
-                variant={chartType === type ? 'filled' : 'outlined'}
-                sx={{ fontWeight: 'bold' }}
-              />
-            ))}
-          </Box>
-        </Paper>
-
-        {/* Additional Usecase Type Filter - Added after first graph */}
-        <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
-            🎯 Additional Usecase Type Filter
-          </Typography>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                select
-                label="🔍 Filter by Specific Usecase Type"
-                value={pocTypeFilter}
-                onChange={(e) => setPocTypeFilter(e.target.value)}
-                sx={{ minWidth: 220 }}
-              // REMOVED: disabled={salesReportActive}
-              >
-                <MenuItem value="">All Usecase Types</MenuItem>
-                {pocTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip
-                  label={`📊 Total Filtered: ${filteredReports.length}`}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ fontWeight: 'bold' }}
-                />
-                <Chip
-                  label={`✅ Completed: ${completedIncludingConverted}`}
-                  color="success"
-                  variant="outlined"
-                  sx={{ fontWeight: 'bold' }}
-                />
-                <Chip
-                  label={`🔄 In Progress: ${inProgressPocs}`}
-                  color="warning"
-                  variant="outlined"
-                  sx={{ fontWeight: 'bold' }}
-                />
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-        <br />
-
-        {/* Enhanced Filters Section */}
-        <Paper elevation={4} sx={{ p: 3, mb: 4, borderRadius: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
-          {/* Title and Action Buttons in One Line */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              🎛️ Filter Analytics
-            </Typography>
-
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="contained"
-                startIcon={<RefreshIcon />}
-                onClick={refreshData}
-                size="medium"
-                sx={{ fontWeight: 'bold', minWidth: 120 }}
-              >
-                Refresh
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<ClearIcon />}
-                onClick={clearFilters}
-                size="medium"
-                sx={{ fontWeight: 'bold', minWidth: 120 }}
-              >
-                Clear All
-              </Button>
-            </Box>
-          </Box>
-
-          {/* Date Range Filter Chips */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'text.secondary' }}>
-              📅 Date Range:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {['all', 'last30', 'last90', 'last180', 'last365', 'custom'].map((range) => (
-                <Chip
-                  key={range}
-                  label={
-                    range === 'all' ? 'All Time' :
-                      range === 'last30' ? 'Last 30 Days' :
-                        range === 'last90' ? 'Last 90 Days' :
-                          range === 'last180' ? 'Last 6 Months' :
-                            range === 'last365' ? 'Last 1 Year' : 'Custom Date'
-                  }
-                  onClick={() => handleDateRangeChange(range)}
-                  color={dateRange === range ? 'primary' : 'default'}
-                  variant={dateRange === range ? 'filled' : 'outlined'}
-                  sx={{ fontWeight: 'bold' }}
-                />
-              ))}
-            </Box>
-          </Box>
-
-          <Divider sx={{ my: 2 }} />
-
-          {/* Filter Inputs */}
-          <Grid container spacing={2}>
-            {/* Date Inputs */}
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                label="Start Date"
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setDateRange("custom");
-                }}
-                InputLabelProps={{ shrink: true }}
-                disabled={dateRange !== "custom"}
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                label="End Date"
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setDateRange("custom");
-                }}
-                InputLabelProps={{ shrink: true }}
-                disabled={dateRange !== "custom"}
-                size="small"
-              />
-            </Grid>
-          </Grid>
-
-          {error && (
-            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontWeight: 'bold' }}>
-              ⚠️ {error}
-            </Alert>
-          )}
-        </Paper>
-
-
-        <br />
-
-
-
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress size={80} sx={{ color: 'primary.main' }} />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {/* Show ALL charts when NOT in Sales Report mode */}
-            {!salesReportActive && (
-              <>
-                {/* ALWAYS SHOW: Monthly Trend Chart */}
-                <Paper elevation={4} sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: '500px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'secondary.light'
-                }}>
-                  {monthlyChartData ? (
-                    renderChart(monthlyChartData, monthlyChartOptions)
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        📅 No monthly data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-
-                {/* Main Chart (Usecases by Type) */}
-                <Paper elevation={4} sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: '500px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'primary.light'
-                }}>
-                  {chartData ? (
-                    renderChart(chartData, chartOptions)
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        📊 No chart data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-
-                {/* USECASES BY STATUS */}
-                <Paper elevation={4} sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: '500px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'success.light',
-                  width: '100%'
-                }}>
-                  {statusChartData ? (
-                    renderChart(statusChartData, statusChartOptions)
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        🎯 No status data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-
-                {/* USECASES BY CLIENT TYPE */}
-                <Paper elevation={4} sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: '500px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'info.light',
-                  width: '100%'
-                }}>
-                  {clientTypeChartData ? (
-                    renderChart(clientTypeChartData, clientTypeChartOptions)
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        🏢 No client type data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-              </>
-            )}
-
-            {/* When Sales Report is active, show ONLY these two charts */}
-            {salesReportActive && (
-              <>
-
-                {/* 1. Usecases by Sales Person (Status-wise) in Sales Report */}
-                <Paper elevation={4} sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: '600px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                  border: '2px solid',
-                  borderColor: 'warning.light',
-                  width: '100%'
-                }}>
-                  <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1, color: 'orange.800' }}>
-                    👤 Usecases by Sales Person (Status-wise)
-                  </Typography>
-                  {salesPersonChartData ? (
-                    <Bar
-                      data={createSalesPersonChartWithTotals()}
-                      options={salesPersonChartOptions}
+            {/* Additional Usecase Type Filter - Added after first graph */}
+            <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
+                🎯 Additional Usecase Type Filter
+              </Typography>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="🔍 Filter by Specific Usecase Type"
+                    value={pocTypeFilter}
+                    onChange={(e) => setPocTypeFilter(e.target.value)}
+                    sx={{ minWidth: 220 }}
+                  // REMOVED: disabled={salesReportActive}
+                  >
+                    <MenuItem value="">All Usecase Types</MenuItem>
+                    {pocTypes.map((type) => (
+                      <MenuItem key={type} value={type}>
+                        {type}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip
+                      label={`📊 Total Filtered: ${filteredReports.length}`}
+                      color="primary"
+                      variant="outlined"
+                      sx={{ fontWeight: 'bold' }}
                     />
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                      <Typography variant="h5" color="text.secondary">
-                        👤 No sales person data available
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
+                    <Chip
+                      label={`✅ Completed: ${completedIncludingConverted}`}
+                      color="success"
+                      variant="outlined"
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                    <Chip
+                      label={`🔄 In Progress: ${inProgressPocs}`}
+                      color="warning"
+                      variant="outlined"
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+            <br />
 
-                {/* 2. POC CONVERSION BY SALES PERSON */}
-                {pocConversionChartData && (
-                  <Paper elevation={4} sx={{
-                    p: 3,
-                    borderRadius: 3,
-                    height: '600px',
-                    background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                    border: '2px solid',
-                    borderColor: 'warning.main',
-                    width: '100%'
-                  }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
-                      🎯 {pocTypeFilter || "ALL"} CONVERSION BY SALES PERSON
-                    </Typography>
-                    {pocConversionChartData && pocConversionChartData.labels && pocConversionChartData.labels.length > 0 ? (
-                      renderChart(pocConversionChartData, pocConversionChartOptions)
-                    ) : (
-                      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                        <Typography variant="h5" color="text.secondary">
-                          📊 No POC conversion data available
-                        </Typography>
-                      </Box>
-                    )}
-                  </Paper>
+            {/* Enhanced Filters Section */}
+            <Paper elevation={4} sx={{ p: 3, mb: 4, borderRadius: 3, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
+              {/* Title and Action Buttons in One Line */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  🎛️ Filter Analytics
+                </Typography>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<RefreshIcon />}
+                    onClick={refreshData}
+                    size="medium"
+                    sx={{ fontWeight: 'bold', minWidth: 120 }}
+                  >
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ClearIcon />}
+                    onClick={clearFilters}
+                    size="medium"
+                    sx={{ fontWeight: 'bold', minWidth: 120 }}
+                  >
+                    Clear All
+                  </Button>
+                </Box>
+              </Box>
+
+              {/* Date Range Filter Chips */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'text.secondary' }}>
+                  📅 Date Range:
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {['all', 'last30', 'last90', 'last180', 'last365', 'custom'].map((range) => (
+                    <Chip
+                      key={range}
+                      label={
+                        range === 'all' ? 'All Time' :
+                          range === 'last30' ? 'Last 30 Days' :
+                            range === 'last90' ? 'Last 90 Days' :
+                              range === 'last180' ? 'Last 6 Months' :
+                                range === 'last365' ? 'Last 1 Year' : 'Custom Date'
+                      }
+                      onClick={() => handleDateRangeChange(range)}
+                      color={dateRange === range ? 'primary' : 'default'}
+                      variant={dateRange === range ? 'filled' : 'outlined'}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              {/* Filter Inputs */}
+              <Grid container spacing={2}>
+                {/* Date Inputs */}
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Start Date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setDateRange("custom");
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    disabled={dateRange !== "custom"}
+                    size="small"
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    fullWidth
+                    label="End Date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setDateRange("custom");
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    disabled={dateRange !== "custom"}
+                    size="small"
+                  />
+                </Grid>
+              </Grid>
+
+              {error && (
+                <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontWeight: 'bold' }}>
+                  ⚠️ {error}
+                </Alert>
+              )}
+            </Paper>
+
+
+            <br />
+
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                <CircularProgress size={80} sx={{ color: 'primary.main' }} />
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {/* Show ALL charts when NOT in Sales Report mode */}
+                {!salesReportActive && (
+                  <>
+                    {/* ALWAYS SHOW: Monthly Trend Chart */}
+                    <Paper elevation={4} sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      height: '500px',
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                      border: '2px solid',
+                      borderColor: 'secondary.light'
+                    }}>
+                      {monthlyChartData ? (
+                        renderChart(monthlyChartData, monthlyChartOptions)
+                      ) : (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                          <Typography variant="h5" color="text.secondary">
+                            📅 No monthly data available
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+
+                    {/* Main Chart (Usecases by Type) */}
+                    <Paper elevation={4} sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      height: '500px',
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                      border: '2px solid',
+                      borderColor: 'primary.light'
+                    }}>
+                      {chartData ? (
+                        renderChart(chartData, chartOptions)
+                      ) : (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                          <Typography variant="h5" color="text.secondary">
+                            📊 No chart data available
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+
+                    {/* USECASES BY STATUS */}
+                    <Paper elevation={4} sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      height: '500px',
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                      border: '2px solid',
+                      borderColor: 'success.light',
+                      width: '100%'
+                    }}>
+                      {statusChartData ? (
+                        renderChart(statusChartData, statusChartOptions)
+                      ) : (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                          <Typography variant="h5" color="text.secondary">
+                            🎯 No status data available
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+
+                    {/* USECASES BY CLIENT TYPE */}
+                    <Paper elevation={4} sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      height: '500px',
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                      border: '2px solid',
+                      borderColor: 'info.light',
+                      width: '100%'
+                    }}>
+                      {clientTypeChartData ? (
+                        renderChart(clientTypeChartData, clientTypeChartOptions)
+                      ) : (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                          <Typography variant="h5" color="text.secondary">
+                            🏢 No client type data available
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+                  </>
                 )}
-              </>
+
+                {/* When Sales Report is active, show ONLY these two charts */}
+                {salesReportActive && (
+                  <>
+                    {/* 1. Usecases by Sales Person (Status-wise) in Sales Report */}
+                    <Paper elevation={4} sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      height: '600px',
+                      background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                      border: '2px solid',
+                      borderColor: 'warning.light',
+                      width: '100%'
+                    }}>
+                      <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1, color: 'orange.800' }}>
+                        👤 Usecases by Sales Person (Status-wise)
+                      </Typography>
+                      {salesPersonChartData ? (
+                        <Bar
+                          data={createSalesPersonChartWithTotals()}
+                          options={salesPersonChartOptions}
+                        />
+                      ) : (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                          <Typography variant="h5" color="text.secondary">
+                            👤 No sales person data available
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+
+                    {/* 2. POC CONVERSION BY SALES PERSON */}
+                    {pocConversionChartData && (
+                      <Paper elevation={4} sx={{
+                        p: 3,
+                        borderRadius: 3,
+                        height: '600px',
+                        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                        border: '2px solid',
+                        borderColor: 'warning.main',
+                        width: '100%'
+                      }}>
+                        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
+                          🎯 {pocTypeFilter || "ALL"} CONVERSION BY SALES PERSON
+                        </Typography>
+                        {pocConversionChartData && pocConversionChartData.labels && pocConversionChartData.labels.length > 0 ? (
+                          renderChart(pocConversionChartData, pocConversionChartOptions)
+                        ) : (
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <Typography variant="h5" color="text.secondary">
+                              📊 No POC conversion data available
+                            </Typography>
+                          </Box>
+                        )}
+                      </Paper>
+                    )}
+                  </>
+                )}
+              </Box>
             )}
-          </Box>
+          </>
         )}
       </Box>
     </Box>
   );
 };
-
-
 
 export default Report;

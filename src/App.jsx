@@ -14,6 +14,7 @@ import InitiateUsecaseTable from "./components/InitiateUsecaseTable";
 import InitiateUsecaseEdit from './components/InitiateUsecaseEdit';
 import SalesTable from "./components/sales/SalesTable";
 import SalesStatusComponent from "./components/sales/SalesStatusComponent";
+import KnowledgeBase from "./components/KnowledgeBase";
 
 import {
   AppBar,
@@ -53,7 +54,7 @@ function AppContent() {
   // Function to fetch sales persons from API
   const fetchSalesPersons = (token) => {
     return new Promise((resolve, reject) => {
-      axios.get('http://localhost:5050/poc/getAllSalesPerson', {
+      axios.get(`${import.meta.env.VITE_API}/poc/getAllSalesPerson`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -101,7 +102,7 @@ function AppContent() {
 
       const validateInBackground = async () => {
         try {
-          const response = await axios.get('http://localhost:5050/poc/api/auth/validate', {
+          const response = await axios.get(`${import.meta.env.VITE_API}/poc/api/auth/validate`, {
             headers: { Authorization: `Bearer ${token}` },
             timeout: 5000
           });
@@ -147,7 +148,7 @@ function AppContent() {
   // Handle logout
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5050/poc/api/auth/logout', {}, {
+      await axios.post('${import.meta.env.VITE_API}/poc/api/auth/logout', {}, {
         withCredentials: true
       });
     } catch (error) {
@@ -524,6 +525,8 @@ function AppContent() {
           }
         />
 
+
+
         <Route
           path="/edit-poc"
           element={
@@ -584,6 +587,32 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/knowledge-base"
+          element={
+            <ProtectedRoute>
+              <KnowledgeBase
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* <Route
+          path="/employee-report"
+          element={
+            <ProtectedRoute>
+              <EmployeeReport
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        /> */}
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -99,6 +99,13 @@ const authenticateToken = (req, res, next) => {
 
 const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
+    // Add these state variables at the top with other useState declarations (around line 140-150)
+    const logoutInProgress = React.useRef(false);
+    const lastActivity = React.useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+
+
     const [userPermissions, setUserPermissions] = useState({});
     const [statusData, setStatusData] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -176,6 +183,100 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     const [revokeMessage, setRevokeMessage] = useState('');
     const [revokeLoading, setRevokeLoading] = useState(false);
 
+    // Token expiry check
+    const isTokenExpired = React.useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
+
+    // Auto logout handler
+    const handleAutoLogout = React.useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
+
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+
+        if (onLogout) {
+            onLogout();
+        }
+    }, [onLogout]);
+
+    // Update activity timestamp
+    const updateActivity = React.useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    // Add these useEffect hooks after your existing useEffect (around line 280-320)
+
+    // Periodic token expiry check
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    // Inactivity tracking
+    React.useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    // Session expiry check
+    React.useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
+
+    // Add early return for logout in progress (around line 320-330)
+    // Block UI rendering when logout is in progress
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
+
     // Update the delete function name and handler
     const handleRevokeLeaveClick = (leave) => {
         setLeaveToRevoke(leave);
@@ -194,7 +295,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             const currentUser = user?.emp_name || user?.email_id || 'Unknown User';
 
             // Send delete request with additional info
-            const response = await axios.delete(`http://localhost:5050/poc/leave/delete/${leaveToRevoke.id}`, {
+            const response = await axios.delete(`${import.meta.env.VITE_API}/poc/leave/delete/${leaveToRevoke.id}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -380,7 +481,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             contactDuringLeave: leave.contact_during_leave || '',
             halfDay: leave.half_day || false,
             halfDayType: leave.half_day_type || 'first',
-            status: leave.status || 'pending'
+            // status: leave.status || 'pending' // Remove this if not needed
         });
         setEditLeaveDialogOpen(true);
     };
@@ -395,10 +496,19 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     };
 
     const handleEditLeaveDateChange = (name, date) => {
-        setEditLeaveForm(prev => ({
-            ...prev,
-            [name]: date
-        }));
+        setEditLeaveForm(prev => {
+            const newForm = {
+                ...prev,
+                [name]: date
+            };
+
+            // Real-time validation
+            if (name === 'startDate' && newForm.endDate && newForm.endDate.isBefore(date, 'day')) {
+                newForm.endDate = date;
+            }
+
+            return newForm;
+        });
     };
 
     const handleSubmitEditLeave = async (e) => {
@@ -406,6 +516,20 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         setEditLeaveLoading(true);
         setError('');
         setSuccess('');
+
+        // Add validation for dates
+        if (!editLeaveForm.startDate || !editLeaveForm.endDate) {
+            setError('Please select both start and end dates');
+            setEditLeaveLoading(false);
+            return;
+        }
+
+        // Ensure end date is not before start date
+        if (editLeaveForm.endDate.isBefore(editLeaveForm.startDate, 'day')) {
+            setError('End date cannot be before start date');
+            setEditLeaveLoading(false);
+            return;
+        }
 
         try {
             const token = localStorage.getItem('authToken');
@@ -422,7 +546,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             };
 
             const response = await axios.put(
-                `http://localhost:5050/poc/leave/edit/${leaveToEdit.id}`,
+                `${import.meta.env.VITE_API}/poc/leave/edit/${leaveToEdit.id}`,
                 payload,
                 {
                     headers: {
@@ -464,7 +588,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             setDeleteLeaveLoading(true);
             const token = localStorage.getItem('authToken');
 
-            const response = await axios.delete(`http://localhost:5050/poc/leave/delete/${leaveToDelete.id}`, {
+            const response = await axios.delete(`${import.meta.env.VITE_API}/poc/leave/delete/${leaveToDelete.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -513,7 +637,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             setLeaveLoading(true);
             const token = localStorage.getItem('authToken');
 
-            const response = await axios.get('http://localhost:5050/poc/leave/requests', {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/leave/requests`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -598,10 +722,19 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     };
 
     const handleLeaveDateChange = (name, date) => {
-        setLeaveForm(prev => ({
-            ...prev,
-            [name]: date
-        }));
+        setLeaveForm(prev => {
+            const newForm = {
+                ...prev,
+                [name]: date
+            };
+
+            // Real-time validation: if end date becomes before start date, reset it
+            if (name === 'startDate' && newForm.endDate && newForm.endDate.isBefore(date, 'day')) {
+                newForm.endDate = date; // Set end date to start date
+            }
+
+            return newForm;
+        });
     };
 
     const calculateLeaveDays = () => {
@@ -617,6 +750,20 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         setLeaveLoading(true);
         setError('');
         setSuccess('');
+
+        // Add validation for dates
+        if (!leaveForm.startDate || !leaveForm.endDate) {
+            setError('Please select both start and end dates');
+            setLeaveLoading(false);
+            return;
+        }
+
+        // Ensure end date is not before start date
+        if (leaveForm.endDate.isBefore(leaveForm.startDate, 'day')) {
+            setError('End date cannot be before start date');
+            setLeaveLoading(false);
+            return;
+        }
 
         if (!leaveForm.leaveType) {
             setError('Please select leave type');
@@ -652,7 +799,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
             console.log('Sending payload to backend:', JSON.stringify(payload, null, 2));
 
-            const response = await axios.post('http://localhost:5050/poc/leave/apply', payload, {
+            const response = await axios.post(`${import.meta.env.VITE_API}/poc/leave/apply`, payload, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -722,7 +869,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
             // Try the getSummaryReport API endpoint (with /poc prefix)
             try {
-                const response = await axios.get(`http://localhost:5050/poc/getSummaryReport?date=${targetDate}`, {
+                const response = await axios.get(`${import.meta.env.VITE_API}/poc/getSummaryReport?date=${targetDate}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -778,7 +925,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
                 // Try fallback to the getSummaryReport endpoint without /poc prefix
                 try {
-                    const response = await axios.get(`http://localhost:5050/poc/getSummaryReport?date=${targetDate}`, {
+                    const response = await axios.get(`${import.meta.env.VITE_API}/poc/getSummaryReport?date=${targetDate}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
 
@@ -953,7 +1100,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             const token = localStorage.getItem('authToken');
 
             // API endpoint to get status by date
-            const response = await axios.get(`http://localhost:5050/poc/getStatusByDate?date=${targetDate}`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/getStatusByDate?date=${targetDate}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -1050,9 +1197,14 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     }, []);
 
     const fetchUserPermissions = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         try {
-            const token = localStorage.getItem('authToken');
-            const response = await axios.get(`http://localhost:5050/poc/permissions/${user?.emp_id}`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/permissions/${user?.emp_id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUserPermissions(response.data || { all_status_access: false });
@@ -1066,9 +1218,14 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     };
 
     const fetchUsecases = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         try {
-            const token = localStorage.getItem('authToken');
-            const response = await axios.get('http://localhost:5050/poc/getUsecases', {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/getUsecases`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -1084,7 +1241,6 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             setUsecases(formattedUsecases);
         } catch (error) {
             console.error('Error fetching usecases:', error);
-            // No dummy data
             setUsecases([]);
             setError('Failed to load usecases');
             setTimeout(() => setError(''), 3000);
@@ -1098,11 +1254,16 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     );
 
     const fetchLeads = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         try {
-            const token = localStorage.getItem('authToken');
             console.log('Fetching leads with token:', !!token);
 
-            const response = await axios.get('http://localhost:5050/poc/getLeads', {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/getLeads`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -1123,7 +1284,6 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         } catch (error) {
             console.error('Error fetching leads:', error);
             console.error('Error details:', error.response?.data);
-            // No dummy data
             setLeads([]);
             setError('Failed to load leads');
             setTimeout(() => setError(''), 3000);
@@ -1131,13 +1291,18 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
     };
 
     const fetchTodayStatus = async (date = null) => {
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         try {
-            const token = localStorage.getItem('authToken');
             const targetDate = date || new Date().toISOString().split('T')[0];
 
             console.log('Fetching status for date:', targetDate);
 
-            const response = await axios.get(`http://localhost:5050/poc/getStatusByDate?date=${targetDate}`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/getStatusByDate?date=${targetDate}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -1218,6 +1383,13 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         setStatusLoading(true);
         setError('');
         setSuccess('');
@@ -1229,8 +1401,6 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         }
 
         try {
-            const token = localStorage.getItem('authToken');
-
             const selectedUsecase = usecases.find(u => u.id == statusData.usecaseId);
             const selectedLeads = leads.filter(l => statusData.leadIds.includes(l.id));
 
@@ -1243,10 +1413,12 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                 leadNames: selectedLeads.map(lead => lead.name).join(', '),
                 leadIds: statusData.leadIds.join(',')
             };
+
             console.log("Payload being sent:", JSON.stringify(payload, null, 2));
+
             const url = editMode
-                ? `http://localhost:5050/poc/empupdateStatus/${editId}`
-                : 'http://localhost:5050/poc/saveDailyStatus';
+                ? `${import.meta.env.VITE_API}/poc/empupdateStatus/${editId}`
+                : `${import.meta.env.VITE_API}/poc/saveDailyStatus`;
 
             const method = editMode ? 'put' : 'post';
 
@@ -1266,6 +1438,8 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             setStatusLoading(false);
         }
     };
+
+
     const formatDateToYYYYMMDD = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
@@ -1309,7 +1483,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         if (statusToDelete) {
             try {
                 const token = localStorage.getItem('authToken');
-                await axios.delete(`http://localhost:5050/poc/deleteStatus/${statusToDelete.id}`, {
+                await axios.delete(`${import.meta.env.VITE_API}/poc/deleteStatus/${statusToDelete.id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setSuccess('Status deleted successfully!');
@@ -2050,10 +2224,16 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                                         fullWidth: true,
                                                                         size: 'small',
                                                                         required: true,
-                                                                        variant: 'outlined'
+                                                                        variant: 'outlined',
+                                                                        error: leaveForm.endDate && leaveForm.startDate &&
+                                                                            leaveForm.endDate.isBefore(leaveForm.startDate, 'day'),
+                                                                        helperText: leaveForm.endDate && leaveForm.startDate &&
+                                                                            leaveForm.endDate.isBefore(leaveForm.startDate, 'day')
+                                                                            ? 'End date must be after start date'
+                                                                            : ''
                                                                     }
                                                                 }}
-                                                                minDate={leaveForm.startDate}
+                                                                minDate={leaveForm.startDate} // This already enforces the minimum date
                                                             />
                                                         </Grid>
                                                     </Grid>
@@ -2098,12 +2278,12 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                                 <FormControlLabel
                                                                     value="first"
                                                                     control={<Radio size="small" />}
-                                                                    label="First Half (9AM - 1PM)"
+                                                                    label="First Half (9:30 AM - 1:30 PM)"
                                                                 />
                                                                 <FormControlLabel
                                                                     value="second"
                                                                     control={<Radio size="small" />}
-                                                                    label="Second Half (2PM - 6PM)"
+                                                                    label="Second Half (2:30 PM - 6:30 PM)"
                                                                 />
                                                             </RadioGroup>
                                                         </FormControl>
@@ -2114,7 +2294,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                         fullWidth
                                                         multiline
                                                         rows={3}
-                                                        label="Reason for Leave *"
+                                                        label="Reason for Leave "
                                                         name="reason"
                                                         value={leaveForm.reason}
                                                         onChange={handleLeaveInputChange}
@@ -2884,7 +3064,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                                         padding: 0,
                                                                         borderRadius: '50%',
                                                                         bgcolor: isToday ? 'rgb(71, 236, 134)' :
-                                                                            (leaveCount > 0 ? '#ffebee' : 'transparent'), 
+                                                                            (leaveCount > 0 ? '#ffebee' : 'transparent'),
                                                                         color: isCurrentMonth ? 'text.primary' : 'text.disabled',
                                                                         borderColor: isToday ? 'primary.main' : 'grey.300',
                                                                         borderWidth: isToday ? 2 : 1,

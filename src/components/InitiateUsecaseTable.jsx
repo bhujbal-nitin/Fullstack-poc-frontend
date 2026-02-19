@@ -95,28 +95,88 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
 
 
+    const logoutInProgress = React.useRef(false);
+    const lastActivity = React.useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
-    // Usecase types for dropdown
-    const usecaseTypes = [
-        'POC',
-        'POP',
-        'PRJ Usecase',
-        'Partner Support',
-        'Feasibility Check',
-        'Operational Support',
-        'R&D',
-        'Solution Consultation',
-        'Efforts Estimation',
-        'Task',
-        'Demo',
-        'Internal',
-        'Event',
-        'Workshop',
-        'Support',
-        'Vco Create'
-    ];
+    const isTokenExpired = useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
 
+    const handleAutoLogout = useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
 
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+
+        if (handleLogout) {
+            handleLogout();
+        }
+    }, [handleLogout]);
+
+    const updateActivity = useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    // Periodic token expiry check
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000); // Check every minute
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    // Inactivity tracking
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000); // Check every minute
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    // Session expiry check
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
 
 
     // Update fetchPocData to check permissions first
@@ -125,6 +185,12 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             setLoading(true);
             setError("");
             const token = localStorage.getItem('authToken');
+
+            // Add token validation
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
 
             // Get the salesperson name from currentUser
             const salesPersonName = currentUser?.emp_name || currentUser?.salesperson_name;
@@ -137,7 +203,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             }
 
             // First, check user permissions
-            const permissionsResponse = await axios.get(`http://localhost:5050/poc/permissions/${empId}`, {
+            const permissionsResponse = await axios.get(`${import.meta.env.VITE_API}/poc/permissions/${empId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -150,7 +216,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             if (hasAdminAccess) {
                 // If user has sales_admin permission, fetch all records
                 console.log('User has sales_admin access, fetching all records');
-                response = await axios.get('http://localhost:5050/poc/getAllPocs', {
+                response = await axios.get(`${import.meta.env.VITE_API}/poc/getAllPocs`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -159,7 +225,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             } else {
                 // If user doesn't have sales_admin permission, fetch only their records
                 console.log('User does not have sales_admin access, fetching only their records');
-                response = await axios.get('http://localhost:5050/poc/getAllPocs', {
+                response = await axios.get(`${import.meta.env.VITE_API}/poc/getAllPocs`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     },
@@ -182,8 +248,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
         } catch (err) {
             console.error('Error fetching POC data:', err);
             if (err.response?.status === 401) {
-                handleLogout();
-                navigate('/login');
+                handleAutoLogout(); // Change from handleLogout() to handleAutoLogout()
             } else {
                 setError(err.response?.data?.message || 'Failed to fetch POC data');
             }
@@ -198,8 +263,14 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
         try {
             const token = localStorage.getItem('authToken');
 
+            // Add token validation
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             // Update status in the database
-            await axios.put(`http://localhost:5050/poc/updateInitiatedStatus/${pocId}`,
+            await axios.put(`${import.meta.env.VITE_API}/poc/updateInitiatedStatus/${pocId}`,
                 { status: newStatus },
                 {
                     headers: {
@@ -227,7 +298,11 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
         } catch (error) {
             console.error('Error updating status:', error);
-            showSnackbar('Failed to update status', 'error');
+            if (error.response?.status === 401) {
+                handleAutoLogout();
+            } else {
+                showSnackbar('Failed to update status', 'error');
+            }
         }
     };
 
@@ -551,6 +626,13 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
     const handleUsecaseTypeChange = async (pocId, selectedType) => {
         try {
             const token = localStorage.getItem('authToken');
+
+            // Add token validation
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             const currentPoc = pocData.find(poc => poc.id === pocId);
 
             if (!currentPoc) {
@@ -577,7 +659,7 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
             console.log('Saving POC with data:', requestBody);
 
             // Call your API to save to both tables
-            const response = await axios.post('http://localhost:5050/poc/savepocprjid',
+            const response = await axios.post(`${import.meta.env.VITE_API}/poc/savepocprjid`,
                 requestBody,
                 {
                     headers: {
@@ -586,17 +668,6 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
                     }
                 }
             );
-
-            // Also update the generated_usecase in poc_details table
-            // await axios.put(`http://localhost:5050/poc/updateGeneratedUsecase/${pocId}`,
-            //     { generatedUsecase: selectedType },
-            //     {
-            //         headers: {
-            //             'Authorization': `Bearer ${token}`,
-            //             'Content-Type': 'application/json'
-            //         }
-            //     }
-            // );
 
             // Update local state
             setPocData(prevData =>
@@ -613,7 +684,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
         } catch (error) {
             console.error('Error generating usecase:', error);
-            if (error.response?.data?.message) {
+            if (error.response?.status === 401) {
+                handleAutoLogout();
+            } else if (error.response?.data?.message) {
                 showSnackbar(`Failed to generate usecase: ${error.response.data.message}`, 'error');
             } else {
                 showSnackbar('Failed to generate usecase', 'error');
@@ -744,7 +817,14 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
         try {
             const token = localStorage.getItem('authToken');
-            const response = await axios.delete(`http://localhost:5050/poc/deleteInitiatedPoc/${pocToDelete.id}`, {
+
+            // Add token validation
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
+            const response = await axios.delete(`${import.meta.env.VITE_API}/poc/deleteInitiatedPoc/${pocToDelete.id}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -756,7 +836,9 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
 
         } catch (error) {
             console.error('Error deleting POC:', error);
-            if (error.response?.status === 403) {
+            if (error.response?.status === 401) {
+                handleAutoLogout();
+            } else if (error.response?.status === 403) {
                 // Status validation failed from backend
                 showSnackbar(error.response.data.message, 'warning');
             } else {
@@ -780,6 +862,15 @@ const InitiateUsecaseTable = ({ currentUser, navigate, handleLogout }) => {
     const handleCloseSnackbar = () => {
         setSnackbar({ ...snackbar, open: false });
     };
+
+    // Add this before the return statement
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>

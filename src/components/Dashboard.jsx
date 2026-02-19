@@ -17,7 +17,8 @@ import {
   Person,
   ViewModule,
   Sell,
-  AdminPanelSettings
+  AdminPanelSettings,
+  MenuBook
 } from '@mui/icons-material';
 
 const Dashboard = ({ onNavigate, onLogout, user }) => {
@@ -31,36 +32,67 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
     sales_dashboard_access: false,
     status_status_access: false,
     admin_access: false,
+    knowledge_base_access: true,
   });
   const [loading, setLoading] = useState(true);
   const [activeDashboard, setActiveDashboard] = useState('');
-  const [activeTab, safeSetactivetab] = useState('poc'); // 'poc' or 'sales'
+  const [activeTab, setActiveTab] = useState('poc');
+  const [error, setError] = useState(null);
 
   const logoutInProgress = useRef(false);
+  const lastActivity = useRef(Date.now());
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
-
-  useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-    const departmentName = storedUser?.department_name;
-    const role = storedUser?.role;
-
-    if (role === 'Department Admin') {
-      setActiveDashboard('Admin Dashboard');
-      safeSetactivetab('poc'); // Default to POC tab
-    } else if (departmentName === 'PCS ROW') {
-      setActiveDashboard('POC Dashboard');
-      safeSetactivetab('poc');
-    } else if (departmentName === 'sales') {
-      setActiveDashboard('Sales Dashboard');
-      safeSetactivetab('sales');
-    } else {
-      setActiveDashboard('General Dashboard');
+  // Token expiry check
+  const isTokenExpired = useCallback((token) => {
+    if (!token) return true;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp * 1000 < Date.now();
+    } catch {
+      return true;
     }
   }, []);
 
-  const fetchUserPermissions = async () => {
-    const token = localStorage.getItem('authToken');
+  // Auto logout handler
+  const handleAutoLogout = useCallback(() => {
+    if (logoutInProgress.current) return;
+    logoutInProgress.current = true;
 
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    localStorage.removeItem('refreshToken');
+    onLogout();
+  }, [onLogout]);
+
+  // Update activity timestamp
+  const updateActivity = useCallback(() => {
+    lastActivity.current = Date.now();
+  }, []);
+
+  // Safe navigation with token check
+  const safeNavigate = useCallback((route) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || isTokenExpired(token)) {
+      handleAutoLogout();
+      return;
+    }
+    onNavigate(route);
+  }, [handleAutoLogout, isTokenExpired, onNavigate]);
+
+  // Safe tab setter with token check
+  const safeSetActiveTab = useCallback((tab) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || isTokenExpired(token)) {
+      handleAutoLogout();
+      return;
+    }
+    setActiveTab(tab);
+  }, [handleAutoLogout, isTokenExpired]);
+
+  // Fetch user permissions
+  const fetchUserPermissions = useCallback(async () => {
+    const token = localStorage.getItem('authToken');
     if (!token || isTokenExpired(token)) {
       handleAutoLogout();
       return;
@@ -77,79 +109,118 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
         }
       );
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         handleAutoLogout();
         return;
       }
 
-      if (response.ok) {
-        const userPermissions = await response.json();
-        setPermissions(userPermissions);
+      if (response.status === 403) {
+        console.error('Access forbidden');
+        return;
       }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const userPermissions = await response.json();
+      setPermissions(userPermissions);
     } catch (error) {
-      handleAutoLogout();
+      console.error('Error fetching permissions:', error);
+      setError('Failed to load permissions');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, handleAutoLogout, isTokenExpired]);
 
-
-  const isTokenExpired = (token) => {
-    if (!token) return true;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.exp * 1000 < Date.now();
-    } catch (e) {
-      return true;
-    }
-  };
+  // Set initial dashboard based on user role
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    const departmentName = storedUser?.department_name;
+    const role = storedUser?.role;
 
-    if (!token || isTokenExpired(token)) {
-      handleAutoLogout();
-      return;
+    if (role === 'Department Admin') {
+      setActiveDashboard('Admin Dashboard');
+      setActiveTab('poc');
+    } else if (departmentName === 'PCS ROW') {
+      setActiveDashboard('POC Dashboard');
+      setActiveTab('poc');
+    } else if (departmentName === 'sales') {
+      setActiveDashboard('Sales Dashboard');
+      setActiveTab('sales');
+    } else {
+      setActiveDashboard('General Dashboard');
     }
-
-    fetchUserPermissions();
   }, []);
 
-  const handleAutoLogout = useCallback(() => {
-    if (logoutInProgress.current) return; // 🔥 prevent multiple calls
-
-    logoutInProgress.current = true;
-
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-
-    onLogout();
-  }, [onLogout]);
-
-  const safeNavigate = (route) => {
+  // Initial token check and permissions fetch
+  useEffect(() => {
     const token = localStorage.getItem('authToken');
-
-    if (!token || isTokenExpired(token)) {
-      handleAutoLogout();
-      return; // ❌ STOP navigation
-    }
-
-    onNavigate(route);
-  };
-
-  const safeSetActiveTab = (tab) => {
-    const token = localStorage.getItem('authToken');
-
     if (!token || isTokenExpired(token)) {
       handleAutoLogout();
       return;
     }
+    fetchUserPermissions();
+  }, [fetchUserPermissions, handleAutoLogout, isTokenExpired]);
 
-    safeSetactivetab(tab);
-  };
+  // Periodic token expiry check
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const token = localStorage.getItem('authToken');
+      if (token && isTokenExpired(token)) {
+        handleAutoLogout();
+      }
+    }, 60000);
 
+    return () => clearInterval(interval);
+  }, [handleAutoLogout, isTokenExpired]);
 
+  // Inactivity tracking
+  useEffect(() => {
+    const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity);
+    });
 
-  // 🔒 Block UI rendering when logout is in progress
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+        handleAutoLogout();
+      }
+    }, 60000);
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity);
+      });
+      clearInterval(interval);
+    };
+  }, [handleAutoLogout, updateActivity]);
+
+  // Session expiry warning
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+      if (timeUntilExpiry > 0 && timeUntilExpiry < 5 * 60 * 1000) {
+        // Show warning 5 minutes before expiry
+        console.log('Session expiring soon');
+      }
+
+      const logoutTimer = setTimeout(() => {
+        handleAutoLogout();
+      }, timeUntilExpiry);
+
+      return () => clearTimeout(logoutTimer);
+    } catch {
+      // Handle error silently
+    }
+  }, [handleAutoLogout]);
+
+  // Block UI rendering when logout is in progress
   if (logoutInProgress.current) {
     return (
       <div className="dashboard-container">
@@ -157,7 +228,6 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
       </div>
     );
   }
-
 
   if (loading) {
     return (
@@ -269,6 +339,23 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
         </div>
       )}
 
+      {/* Knowledge Base */}
+      {permissions.knowledge_base_access && (
+        <div className="card knowledge-card" onClick={() => safeNavigate('knowledge-base')}>
+          <div className="card-icon">
+            <MenuBook className="icon-knowledge" />
+          </div>
+          <div className="card-content">
+            <h3>Knowledge Base</h3>
+            <p>Access documentation and guides</p>
+            <div className="card-footer">
+              <span className="card-tag">Resources</span>
+              <span className="card-arrow">→</span>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Dashboard Access */}
       {/* {permissions.dashboard_access && (
@@ -291,8 +378,9 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
         !permissions.usecase_creation_access &&
         !permissions.report_access &&
         !permissions.sales_access &&
-        !permissions.status_access && 
-        !permissions.admin_access && (
+        !permissions.status_access &&
+        !permissions.admin_access &&
+        !permissions.knowledge_base_access && (
           <div className="no-access-card">
             <div className="no-access-content">
               <div className="no-access-icon">⚠️</div>

@@ -28,15 +28,9 @@ import {
     ListItemIcon,
     ListItemText,
     ListItemButton,
-    Divider,
-    Card,
-    CardContent,
     Stepper,
     Step,
     StepLabel,
-    InputAdornment,
-    Tooltip,
-    Alert,
     CircularProgress
 } from '@mui/material';
 import {
@@ -221,7 +215,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Fetch sales persons from API
                 try {
-                    const salesResponse = await axios.get('http://localhost:5050/poc/getAllSalesPerson', {
+                    const salesResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllSalesPerson`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -236,7 +230,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Fetch Assigned To options from API
                 try {
-                    const assignToResponse = await axios.get('http://localhost:5050/poc/getAllAssignTo', {
+                    const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllAssignTo`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -253,7 +247,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 // Fetch Created By options from API with emp_name parameter
                 if (emp_name) {
                     try {
-                        const createdByResponse = await axios.get(`http://localhost:5050/poc/getCreatedBy?emp_name=${encodeURIComponent(emp_name)}`, {
+                        const createdByResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getCreatedBy?emp_name=${encodeURIComponent(emp_name)}`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`
                             }
@@ -269,9 +263,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 }
 
                 // Fetch approvers from the new API endpoint
-                // Fetch approvers from the new API endpoint
                 try {
-                    const approversResponse = await axios.get('http://localhost:5050/poc/getAllApprovedBy', {
+                    const approversResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllApprovedBy`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -291,7 +284,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -301,7 +294,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 // setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 // setCreatedByOptions(['admin', 'manager', 'user']);
                 // setApproverOptions(['admin', 'manager', 'supervisor']);
-                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -407,7 +400,6 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             })
                             .join(',')
                         : null,
-
                     remark: remark || null,
                     actualStartDate: normalizeDate(actualStartDate),
                     actualEndDate: normalizeDate(actualEndDate),
@@ -418,7 +410,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 };
 
                 const token = localStorage.getItem('authToken');
-                const response = await axios.put(`http://localhost:5050/poc/update/${poc.pocId}`, formData, {
+                const response = await axios.put(`${import.meta.env.VITE_API}/poc/update/${poc.pocId}`, formData, {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`

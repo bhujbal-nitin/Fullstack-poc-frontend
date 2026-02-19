@@ -6,12 +6,10 @@ import {
     IconButton,
     Typography,
     Button as MuiButton,
+    Box,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-
-// import MuiButton from '@mui/material/Button';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-// import { useNavigate } from 'react-router-dom';
 
 import Dropdown from "./DropDown";
 import TextInput from "./TextInput";
@@ -51,6 +49,94 @@ const PocFormComponent = React.memo(({
     handleLogout,
     isEditMode = false
 }) => {
+    const logoutInProgress = useRef(false);
+    const lastActivity = useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+    const isTokenExpired = useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
+
+    const handleAutoLogout = useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
+
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+
+        if (handleLogout) {
+            handleLogout();
+        }
+    }, [handleLogout]);
+
+    const updateActivity = useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
+
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
+
     const handleLocalChange = useCallback((field, value) => {
         handleChange(field, value);
     }, [handleChange]);
@@ -273,6 +359,86 @@ const InitiateUsecaseEdit = ({
     onSubmissionSuccess,
     showSnackbar
 }) => {
+    const logoutInProgress = useRef(false);
+    const lastActivity = useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+    const isTokenExpired = useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
+
+    const handleAutoLogout = useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
+
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+
+        if (onLogout) {
+            onLogout();
+        }
+    }, [onLogout]);
+
+    const updateActivity = useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
+
     const location = useLocation();
     const internalNavigate = useNavigate();
     const navigate = externalNavigate || internalNavigate;
@@ -310,6 +476,14 @@ const InitiateUsecaseEdit = ({
 
     const hasInitializedForm = useRef(false);
 
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
+
     useEffect(() => {
         if (!editRecord) {
             showSnackbar?.('No record found for editing', 'error');
@@ -342,6 +516,12 @@ const InitiateUsecaseEdit = ({
 
         // Fetch sales persons
         const token = localStorage.getItem('authToken');
+
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         if (token && fetchSalesPersons) {
             setLoadingSalesPersons(true);
             fetchSalesPersons(token)
@@ -350,6 +530,9 @@ const InitiateUsecaseEdit = ({
                 })
                 .catch(error => {
                     console.error('Error fetching sales persons:', error);
+                    if (error.response?.status === 401) {
+                        handleAutoLogout();
+                    }
                     setSalesPersons([]);
                 })
                 .finally(() => {
@@ -360,7 +543,7 @@ const InitiateUsecaseEdit = ({
         return () => {
             hasInitializedForm.current = false;
         };
-    }, [editRecord, fetchSalesPersons, navigate, showSnackbar]);
+    }, [editRecord, fetchSalesPersons, navigate, showSnackbar, handleAutoLogout, isTokenExpired]);
 
     const handleChange = useCallback((field, value) => {
         switch (field) {
@@ -428,9 +611,16 @@ const InitiateUsecaseEdit = ({
             return;
         }
 
+        // Check token before submitting
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         // Create payload
         const payload = {
-            id: editRecord.id, // Include ID for update
+            id: editRecord.id,
             salesPerson: salesPerson,
             region: region,
             endCustomerType: endCustomerType,
@@ -451,9 +641,8 @@ const InitiateUsecaseEdit = ({
         };
 
         setLoading(true);
-        const token = localStorage.getItem('authToken');
 
-        fetch("http://localhost:5050/poc/updateInitiatedPoc", {
+        fetch(`${import.meta.env.VITE_API}/poc/updateInitiatedPoc`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
@@ -463,19 +652,16 @@ const InitiateUsecaseEdit = ({
         })
             .then(async (res) => {
                 if (res.status === 401) {
-                    onLogout?.();
+                    handleAutoLogout();
                     throw new Error("Session expired. Please login again.");
                 }
 
-                // Handle status validation error (403)
                 if (res.status === 403) {
                     const errorData = await res.json();
                     showSnackbar?.(errorData.message || 'Record status changed. Cannot update.', 'error');
-
-                    // Auto-redirect to table after showing error message
                     setTimeout(() => navigate('/poc-records'), 3000);
                     setLoading(false);
-                    return null; // Stop further processing
+                    return null;
                 }
 
                 if (!res.ok) {
@@ -485,16 +671,12 @@ const InitiateUsecaseEdit = ({
                 return res.json();
             })
             .then((data) => {
-                // If we returned early due to 403 error, data will be null
                 if (data === null) return;
 
-                console.log("Update response:", data); // Debug log
+                console.log("Update response:", data);
 
-                // Check for success in multiple ways to be safe
                 if (data && (data.success === true || data.message?.includes("success") || data.id)) {
                     showSnackbar?.('POC updated successfully!', 'success');
-
-                    // Navigate back to records after successful update
                     setTimeout(() => navigate('/poc-records'), 1000);
                 } else {
                     throw new Error(data?.message || "Update failed");
@@ -503,17 +685,18 @@ const InitiateUsecaseEdit = ({
             .catch((err) => {
                 console.error("Error updating POC:", err);
 
-                // Skip error handling if we already handled the 403 case
                 if (err.message.includes("403")) return;
 
-                // Better error message extraction
+                if (err.message.includes("401") || err.message.includes("Session expired")) {
+                    handleAutoLogout();
+                    return;
+                }
+
                 let errorMessage = "Update failed";
                 try {
-                    // Try to parse as JSON if it's a stringified JSON
                     const errorData = JSON.parse(err.message);
                     errorMessage = errorData.message || errorData.error || errorMessage;
                 } catch {
-                    // If not JSON, use the raw message
                     errorMessage = err.message || "Update failed";
                 }
 
@@ -526,7 +709,7 @@ const InitiateUsecaseEdit = ({
         salesPerson, region, endCustomerType, processType, companyName, spoc, spocEmail,
         designation, mobileNumber, usecase, brief, partnerCompanyName, partnerSpoc,
         partnerSpocEmail, partnerDesignation, partnerMobileNumber, remark, editRecord,
-        onLogout, navigate, showSnackbar
+        handleAutoLogout, isTokenExpired, navigate, showSnackbar
     ]);
 
     const handleLogout = useCallback(() => {
@@ -534,6 +717,8 @@ const InitiateUsecaseEdit = ({
             onLogout();
         } else {
             localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('refreshToken');
             navigate('/login');
         }
     }, [onLogout, navigate]);

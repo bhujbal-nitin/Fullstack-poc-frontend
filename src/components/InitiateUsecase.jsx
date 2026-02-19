@@ -5,6 +5,7 @@ import {
     IconButton,
     Typography,
     Button as MuiButton,  // Rename Material-UI Button
+    Box,
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon
@@ -49,6 +50,94 @@ const PocFormComponent = React.memo(({
     navigate,
     handleLogout
 }) => {
+    const logoutInProgress = useRef(false);
+    const lastActivity = useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+    const isTokenExpired = useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
+
+    const handleAutoLogout = useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
+
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+
+        if (handleLogout) {
+            handleLogout();
+        }
+    }, [handleLogout]);
+
+    const updateActivity = useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
+
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
+
     const handleLocalChange = useCallback((field, value) => {
         handleChange(field, value);
     }, [handleChange]);
@@ -309,6 +398,95 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
 
     const hasResetForm = useRef(false);
 
+    // Auto-logout state variables
+    const logoutInProgress = useRef(false);
+    const lastActivity = useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+    const isTokenExpired = useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
+
+    const handleAutoLogout = useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
+
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
+
+        if (onLogout) {
+            onLogout();
+        }
+    }, [onLogout]);
+
+    const updateActivity = useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
+
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
+
     useEffect(() => {
         // Only reset once when entering the page
         if (!hasResetForm.current) {
@@ -334,6 +512,12 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
 
         // Fetch sales persons when component mounts
         const token = localStorage.getItem('authToken');
+        
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+        
         if (token) {
             setLoadingSalesPersons(true);
             fetchSalesPersons(token)
@@ -342,6 +526,9 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
                 })
                 .catch(error => {
                     console.error('Error fetching sales persons:', error);
+                    if (error.response?.status === 401) {
+                        handleAutoLogout();
+                    }
                     setSalesPersons([]);
                 })
                 .finally(() => {
@@ -353,7 +540,7 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
             // Reset the flag when leaving the page
             hasResetForm.current = false;
         };
-    }, [fetchSalesPersons]);
+    }, [fetchSalesPersons, handleAutoLogout, isTokenExpired]);
 
     // Stable handlers
     const handleChange = useCallback((field, value) => {
@@ -420,6 +607,13 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
         setErrors(newErrors);
         if (Object.keys(newErrors).length > 0) return;
 
+        // Check token before submitting
+        const token = localStorage.getItem('authToken');
+        if (!token || isTokenExpired(token)) {
+            handleAutoLogout();
+            return;
+        }
+
         // Create payload with the exact field names that the confirmation screen expects
         const payload = {
             salesPerson: salesPerson,
@@ -442,9 +636,8 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
         };
 
         setLoading(true);
-        const token = localStorage.getItem('authToken');
 
-        fetch("http://localhost:5050/poc/save", {
+        fetch(`${import.meta.env.VITE_API}/poc/save`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -454,7 +647,7 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
         })
             .then(async (res) => {
                 if (res.status === 401) {
-                    onLogout();
+                    handleAutoLogout();
                     throw new Error("Session expired. Please login again.");
                 }
                 if (!res.ok) {
@@ -493,13 +686,22 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
             })
             .catch((err) => {
                 console.error("Error saving POC:", err);
+                
+                if (err.message.includes("401") || err.message.includes("Session expired")) {
+                    handleAutoLogout();
+                    return;
+                }
+                
                 alert("❌ POC creation failed: " + err.message);
             })
             .finally(() => {
                 setLoading(false);
             });
     }, [
-        salesPerson, region, endCustomerType, processType, companyName, spoc, spocEmail, designation, mobileNumber, usecase, brief, partnerCompanyName, partnerSpoc, partnerSpocEmail, partnerDesignation, partnerMobileNumber, remark, onLogout, onSubmissionSuccess
+        salesPerson, region, endCustomerType, processType, companyName, spoc, spocEmail, 
+        designation, mobileNumber, usecase, brief, partnerCompanyName, partnerSpoc, 
+        partnerSpocEmail, partnerDesignation, partnerMobileNumber, remark, 
+        handleAutoLogout, isTokenExpired, onSubmissionSuccess
     ]);
 
     return (
@@ -532,9 +734,10 @@ const InitiateUsecase = ({ currentUser, onLogout, navigate, fetchSalesPersons, p
             handleSubmit={handleSubmit}
             loading={loading}
             navigate={navigate}
-            handleLogout={onLogout}
+            handleLogout={handleAutoLogout}
         />
     );
 };
 
 export default InitiateUsecase;
+

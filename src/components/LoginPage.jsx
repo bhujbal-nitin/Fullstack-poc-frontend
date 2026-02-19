@@ -37,7 +37,7 @@ const ChangePasswordDialog = ({
         setChangePasswordSuccess('');
 
         try {
-            const response = await axios.post('http://localhost:5050/poc/api/auth/change-password', changePasswordData, {
+            const response = await axios.post(`${import.meta.env.VITE_API}/poc/api/auth/change-password`, changePasswordData, {
                 withCredentials: true
             });
 
@@ -197,7 +197,7 @@ const LoginPage = ({ onLogin }) => {
         setError('');
 
         try {
-            const response = await axios.post('http://localhost:5050/poc/api/auth/login', credentials, {
+            const response = await axios.post(`${import.meta.env.VITE_API}/poc/api/auth/login`, credentials, {
                 withCredentials: true
             });
             if (response.status === 200) {

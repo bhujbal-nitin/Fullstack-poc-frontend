@@ -188,7 +188,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 // Fetch sales persons from API
                 try {
-                    const salesResponse = await axios.get('http://localhost:5050/poc/getAllSalesPerson', {
+                    const salesResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllSalesPerson`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -204,7 +204,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 // In fetchDropdownData function, update the assignTo API call:
                 try {
-                    const assignToResponse = await axios.get('http://localhost:5050/poc/getAllAssignTo', {
+                    const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllAssignTo`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -220,7 +220,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 // Fetch Created By options from API with emp_name parameter
                 if (emp_name) {
                     try {
-                        const createdByResponse = await axios.get(`http://localhost:5050/poc/getCreatedBy?emp_name=${encodeURIComponent(emp_name)}`, {
+                        const createdByResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getCreatedBy?emp_name=${encodeURIComponent(emp_name)}`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`
                             }
@@ -237,7 +237,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -246,7 +246,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
                 setUsers([]);
                 setCreatedByOptions([]);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -361,7 +361,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 console.log(formData);
 
                 const token = localStorage.getItem('authToken');
-                const response = await axios.post('http://localhost:5050/poc/savepocprjid', formData, {
+                const response = await axios.post(`${import.meta.env.VITE_API}/poc/savepocprjid`, formData, {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`

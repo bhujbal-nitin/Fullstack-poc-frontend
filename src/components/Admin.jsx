@@ -75,6 +75,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         all_status_access: false,    // View all POC members statuses
         sales_access: false,       // Initiate usecase
         sales_admin: false,         // View all sales usecases of members
+        knowledge_base_access: false, // Add this line
 
         // Sales Module Permissions
         status_status_access: false,
@@ -82,6 +83,10 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         all_sales_access: false,
 
     });
+
+    const logoutInProgress = React.useRef(false);
+    const lastActivity = React.useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
     // Add these to your existing state declarations
     const [openDialog, setOpenDialog] = useState(false);
@@ -97,31 +102,97 @@ const Admin = ({ onNavigate, onLogout, user }) => {
     });
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-    const handleMenuOpen = (event) => {
-        setAnchorEl(event.currentTarget);
-    };
+    const isTokenExpired = React.useCallback((token) => {
+        if (!token) return true;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 < Date.now();
+        } catch {
+            return true;
+        }
+    }, []);
 
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
+    const handleAutoLogout = React.useCallback(() => {
+        if (logoutInProgress.current) return;
+        logoutInProgress.current = true;
 
-    const handleSettingsClick = () => {
-        onNavigate('admin-settings');
-        handleMenuClose();
-    };
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('refreshToken');
 
-    const handleProfileClick = () => {
-        onNavigate('admin-profile');
-        handleMenuClose();
-    };
+        if (onLogout) {
+            onLogout();
+        }
+    }, [onLogout]);
 
-    // Fetch users from API
+    const updateActivity = React.useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    // Periodic token expiry check
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            const token = localStorage.getItem('authToken');
+            if (token && isTokenExpired(token)) {
+                handleAutoLogout();
+            }
+        }, 60000); // Check every minute
+
+        return () => clearInterval(interval);
+    }, [handleAutoLogout, isTokenExpired]);
+
+    // Inactivity tracking
+    React.useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000); // Check every minute
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
+
+    // Session expiry check
+    React.useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const timeUntilExpiry = payload.exp * 1000 - Date.now();
+
+            const logoutTimer = setTimeout(() => {
+                handleAutoLogout();
+            }, timeUntilExpiry);
+
+            return () => clearTimeout(logoutTimer);
+        } catch {
+            // Handle error silently
+        }
+    }, [handleAutoLogout]);
+
     // Update your fetchUsers function
     const fetchUsers = async () => {
         setLoading(true);
         setError('');
         try {
             const token = localStorage.getItem('authToken');
+
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             const response = await fetch(`${import.meta.env.VITE_API}/poc/admin/getAllUsers`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -165,12 +236,6 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         } finally {
             setLoading(false);
         }
-    };
-
-    const handleAutoLogout = () => {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        onLogout();
     };
 
     useEffect(() => {
@@ -229,6 +294,12 @@ const Admin = ({ onNavigate, onLogout, user }) => {
     const handleStatusChange = async (empId, newStatus) => {
         try {
             const token = localStorage.getItem('authToken');
+
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             const response = await fetch(`${import.meta.env.VITE_API}/poc/admin/updateUserStatus`, {
                 method: 'POST',
                 headers: {
@@ -240,6 +311,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     status: newStatus
                 })
             });
+
 
             if (response.ok) {
                 // Update local state immediately for better UX
@@ -318,6 +390,12 @@ const Admin = ({ onNavigate, onLogout, user }) => {
     const handleSubmitUser = async () => {
         try {
             const token = localStorage.getItem('authToken');
+
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             const endpoint = editingUser
                 ? `${import.meta.env.VITE_API}/poc/admin/updateUser`
                 : `${import.meta.env.VITE_API}/poc/admin/createUser`;
@@ -367,6 +445,12 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         setSelectedUser(user);
         try {
             const token = localStorage.getItem('authToken');
+
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             const response = await fetch(`${import.meta.env.VITE_API}/poc/admin/getUserPermissions/${user.emp_id}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -384,6 +468,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     all_status_access: data.all_status_access || false,
                     sales_access: data.sales_access || false,
                     sales_admin: data.sales_admin || false,
+                    knowledge_base_access: data.knowledge_base_access || false,
 
                     // Sales Module Permissions
                     status_status_access: data.status_status_access || false,
@@ -399,6 +484,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     all_status_access: false,
                     sales_access: false,
                     sales_admin: false,
+                    knowledge_base_access: false,
                     status_status_access: false,
                     sales_dashboard_access: false,
                     all_sales_access: false,
@@ -414,6 +500,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                 all_status_access: false,
                 sales_access: false,
                 sales_admin: false,
+                knowledge_base_access: false,
                 status_status_access: false,
                 sales_dashboard_access: false,
                 all_sales_access: false,
@@ -437,6 +524,12 @@ const Admin = ({ onNavigate, onLogout, user }) => {
     const handleSavePermissions = async () => {
         try {
             const token = localStorage.getItem('authToken');
+
+            if (!token || isTokenExpired(token)) {
+                handleAutoLogout();
+                return;
+            }
+
             const response = await fetch(`${import.meta.env.VITE_API}/poc/admin/updateUserPermissions`, {
                 method: 'POST',
                 headers: {
@@ -452,6 +545,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     all_status_access: permissionData.all_status_access,
                     sales_access: permissionData.sales_access,
                     sales_admin: permissionData.sales_admin,
+                    knowledge_base_access: permissionData.knowledge_base_access,
 
                     // Sales Module Permissions
                     status_status_access: permissionData.status_status_access,
@@ -479,6 +573,14 @@ const Admin = ({ onNavigate, onLogout, user }) => {
             });
         }
     };
+
+    if (logoutInProgress.current) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <Typography variant="h5">Session expired. Redirecting to login...</Typography>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: '#f8fafc' }}>
@@ -947,6 +1049,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                 setPermissionData({
                                                     ...permissionData,
                                                     status_access: true,
+                                                    knowledge_base_access: true,
                                                     all_status_access: false,
                                                     usecase_creation_access: false,
                                                     report_access: false,
@@ -1044,6 +1147,9 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                     <Box sx={{ pl: 2 }}>
                                         <Typography variant="body2" color="text.secondary">
                                             • Status Fill Access: {permissionData.status_access ? "✅ Yes" : "❌ No"}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • Knowledge Base Access: {permissionData.knowledge_base_access ? "✅ Yes" : "❌ No"} {/* Add this line */}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             • All Team Status Access: {permissionData.all_status_access ? "✅ Yes" : "❌ No"}

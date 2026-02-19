@@ -313,7 +313,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
 
         // Load other dropdown data
         setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
 
       } catch (error) {
         console.error('Error fetching dropdown data:', error);
@@ -322,7 +322,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
         setRegions(['ROW', 'ISSARC', 'America', 'Other']);
         setUsers([]);
         setCreatedByOptions([]);
-        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DodEdge', 'Mainframe', 'Other']);
+        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
       } finally {
         setApiLoading(false);
       }
@@ -1225,3 +1225,4 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
 };
 
 export default SalesPrjId;
+
