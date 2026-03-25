@@ -195,7 +195,7 @@ const DetailItem = React.memo(({ label, value, render }) => (
 DetailItem.displayName = 'DetailItem';
 
 const SalesTable = ({ onNavigate, onLogout, user }) => {
-    console.log('SalesTable component mounted');
+    console.log('SC Table component mounted');
 
     const theme = useTheme();
     const [open, setOpen] = React.useState(false);
@@ -795,7 +795,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                 return;
             }
 
-            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sales/all`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sc/all`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -873,7 +873,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                 return;
             }
 
-            await axios.delete(`${import.meta.env.VITE_API}/poc/sales/delete/${pocToDelete.pocId}`, {
+            await axios.delete(`${import.meta.env.VITE_API}/poc/sc/delete/${pocToDelete.pocId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -903,7 +903,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                 return;
             }
 
-            await axios.put(`${import.meta.env.VITE_API}/poc/sales/updateStatus/${poc.pocId}`,
+            await axios.put(`${import.meta.env.VITE_API}/poc/sc/updateStatus/${poc.pocId}`,
                 { status: newStatus },
                 {
                     headers: {
@@ -937,7 +937,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                 return;
             }
 
-            await axios.put(`${import.meta.env.VITE_API}/poc/sales/updateRemark/${poc.pocId}`,
+            await axios.put(`${import.meta.env.VITE_API}/poc/sc/updateRemark/${poc.pocId}`,
                 { remark: newRemark },
                 {
                     headers: {

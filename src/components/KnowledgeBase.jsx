@@ -56,6 +56,8 @@ import {
 } from '@mui/icons-material';
 
 const KnowledgeBase = ({ onNavigate, onLogout, user }) => {
+
+    const [currentUser, setCurrentUser] = useState(user);
     const [usecases, setUsecases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -93,6 +95,8 @@ const KnowledgeBase = ({ onNavigate, onLogout, user }) => {
     const isFetching = useRef(false);
     const [downloadingFileId, setDownloadingFileId] = useState(null);
 
+    const canUploadKnowledgeBase = currentUser?.knowledge_base_upload_access === true;
+
     const logoutInProgress = useRef(false);
     const lastActivity = useRef(Date.now());
     const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
@@ -112,6 +116,10 @@ const KnowledgeBase = ({ onNavigate, onLogout, user }) => {
             }
         });
     }, [files]);
+
+    useEffect(() => {
+        fetchUserPermissions();
+    }, []);
 
 
     const isTokenExpired = useCallback((token) => {
@@ -200,6 +208,45 @@ const KnowledgeBase = ({ onNavigate, onLogout, user }) => {
             return;
         }
         onNavigate(route);
+    };
+
+    const fetchUserPermissions = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token || !user?.emp_id) return;
+
+            const response = await fetch(
+                `${import.meta.env.VITE_API}/poc/permissions/${user.emp_id}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) return;
+
+            const permissions = await response.json();
+
+            // merge permissions into user object
+            const updatedUser = {
+                ...user,
+                ...permissions
+            };
+
+            // save to localStorage
+            localStorage.setItem("user", JSON.stringify(updatedUser));
+            setCurrentUser(updatedUser); // THIS IS THE FIX
+
+            // update state if you manage user in parent
+            if (typeof setUser === "function") {
+                setUser(updatedUser);
+            }
+
+        } catch (err) {
+            console.error("Failed to fetch permissions", err);
+        }
     };
 
     const fetchUsecases = async () => {
@@ -340,14 +387,19 @@ const KnowledgeBase = ({ onNavigate, onLogout, user }) => {
             truncate: false,
             render: (usecase) => (
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => handleUploadClick(usecase)}
-                        startIcon={<UploadIcon />}
-                    >
-                        Upload
-                    </Button>
+                    <Tooltip title={!canUploadKnowledgeBase ? "You don't have permission to upload knowledge materials" : ""}>
+                        <span>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleUploadClick(usecase)}
+                                startIcon={<UploadIcon />}
+                                disabled={!canUploadKnowledgeBase}
+                            >
+                                Upload
+                            </Button>
+                        </span>
+                    </Tooltip>
                     <Button
                         variant="outlined"
                         size="small"

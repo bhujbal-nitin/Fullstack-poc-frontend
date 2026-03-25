@@ -33,6 +33,7 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
     status_status_access: false,
     admin_access: false,
     knowledge_base_access: true,
+    sales_report_card_access: false
   });
   const [loading, setLoading] = useState(true);
   const [activeDashboard, setActiveDashboard] = useState('');
@@ -145,9 +146,13 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
     } else if (departmentName === 'PCS ROW') {
       setActiveDashboard('POC Dashboard');
       setActiveTab('poc');
-    } else if (departmentName === 'sales') {
-      setActiveDashboard('Sales Dashboard');
+    } else if (departmentName === 'SC(Solution Consultant)') {
+      setActiveDashboard('sales');
       setActiveTab('sales');
+    }
+    else if (departmentName === 'KB') {  // Add this condition
+      setActiveDashboard('Knowledge Base');
+      setActiveTab('knowledge');  // You might want to add a knowledge tab
     } else {
       setActiveDashboard('General Dashboard');
     }
@@ -240,12 +245,12 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
     );
   }
 
-
   const storedUser = JSON.parse(localStorage.getItem('user'));
   const departmentName = storedUser?.department_name;
   const userRole = storedUser?.role;
-  const isSalesDept = departmentName === 'sales';
+  const isSalesDept = departmentName === 'SC(Solution Consultant)';
   const isPOCTeam = departmentName === 'PCS ROW';
+  const isKBDept = departmentName === 'KB';
   const isDeptAdmin = userRole === 'Department Admin';
 
   // Render POC Features Card Grid
@@ -357,22 +362,22 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
       )}
 
 
-      {/* Dashboard Access */}
-      {/* {permissions.dashboard_access && (
-        <div className="card dashboard-card" onClick={() => safeNavigate('dashboard')}>
+      {/* Sales Report Card - Add this new card */}
+      {permissions.sales_report_card_access && (
+        <div className="card sales-report-card" onClick={() => safeNavigate('sales-report')}>
           <div className="card-icon">
-            <DashboardIcon className="icon-dashboard" />
+            <Assessment className="icon-sales-report" />
           </div>
           <div className="card-content">
-            <h3>Main Dashboard</h3>
-            <p>Access main dashboard features</p>
+            <h3>Sales Report</h3>
+            <p>View sales reports and analytics</p>
             <div className="card-footer">
-              <span className="card-tag">Overview</span>
+              <span className="card-tag">Sales Analytics</span>
               <span className="card-arrow">→</span>
             </div>
           </div>
         </div>
-      )} */}
+      )}
 
       {!permissions.dashboard_access &&
         !permissions.usecase_creation_access &&
@@ -380,7 +385,8 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
         !permissions.sales_access &&
         !permissions.status_access &&
         !permissions.admin_access &&
-        !permissions.knowledge_base_access && (
+        !permissions.knowledge_base_access && 
+        !permissions.sales_report_card_access && (
           <div className="no-access-card">
             <div className="no-access-content">
               <div className="no-access-icon">⚠️</div>
@@ -419,36 +425,23 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
           </div>
           <div className="card-content">
             <h3>Daily Status</h3>
-            <p>Update or view sales daily status</p>
+            <p>Update or view SC daily status</p>
             <div className="card-footer">
-              <span className="card-tag">Sales Tracking</span>
+              <span className="card-tag">SC Tracking</span>
               <span className="card-arrow">→</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add more sales features here as needed */}
-      {/* <div className="card sales-card" onClick={() => safeNavigate('sales-analytics')}>
-        <div className="card-icon">
-          <Assessment className="icon-sales" />
-        </div>
-        <div className="card-content">
-          <h3>Sales Analytics</h3>
-          <p>View sales performance metrics</p>
-          <div className="card-footer">
-            <span className="card-tag">Analytics</span>
-            <span className="card-arrow">→</span>
-          </div>
-        </div>
-      </div> */}
+
 
       {!permissions.sales_dashboard_access && !permissions.status_status_access && (
         <div className="no-access-card">
           <div className="no-access-content">
             <div className="no-access-icon">🔒</div>
             <h3>Limited Access</h3>
-            <p>You don't have access to Sales Dashboard features.</p>
+            <p>You don't have access to SC Dashboard features.</p>
             <p className="contact-admin">Contact administrator for access.</p>
           </div>
         </div>
@@ -472,7 +465,7 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
           onClick={() => safeSetActiveTab('sales')}
         >
           <Sell />
-          <span>Sales Dashboard</span>
+          <span>SC Dashboard</span>
         </button>
       </div>
 
@@ -490,8 +483,8 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
         {activeTab === 'sales' && (
           <>
             <div className="section-header">
-              <h2>Sales Management</h2>
-              <p>Tools and features for sales department</p>
+              <h2>SC Management</h2>
+              <p>Tools and features for SC department</p>
             </div>
             {renderSalesFeatures()}
           </>
@@ -502,7 +495,7 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
 
   // Render Regular User Dashboard
   const renderUserDashboard = () => {
-    if (isPOCTeam) {
+    if (isPOCTeam || isKBDept || departmentName === 'sales') {
       return (
         <>
           <div className="section-header">
@@ -516,8 +509,8 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
       return (
         <>
           <div className="section-header">
-            <h2>Sales Dashboard</h2>
-            <p>Tools and features for sales department</p>
+            <h2>SC Dashboard</h2>
+            <p>Tools and features for SC department</p>
           </div>
           <div className="dashboard-grid">
             {renderSalesFeatures()}
@@ -531,7 +524,7 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
             <Business sx={{ fontSize: 80, color: '#e0e0e0' }} />
           </div>
           <h2>Access Restricted</h2>
-          <p>You are not part of the POC Team or Sales Department.</p>
+          <p>You are not part of the POC Team or SC Department.</p>
           <p className="contact-support">Please contact support if you believe this is an error.</p>
         </div>
       );
@@ -582,7 +575,7 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
           <h2>Welcome back, {user?.emp_name?.split(' ')[0]}! 👋</h2>
           <p className="subtitle">
             {isDeptAdmin
-              ? 'You have full access to both POC and Sales dashboards'
+              ? 'You have full access to both POC and SC dashboards'
               : 'What would you like to do today?'}
           </p>
         </div>

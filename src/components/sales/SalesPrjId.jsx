@@ -277,7 +277,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
 
         // Fetch Assigned To options from API
         try {
-          const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/sales/getAllAssignTo`, {
+          const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/sc/getAllAssignTo`, {
             headers: {
               'Authorization': `Bearer ${token}`
             },
@@ -439,7 +439,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
 
 
 
-        const response = await axios.post(`${import.meta.env.VITE_API}/poc/sales/savepocprjid`, formData, {
+        const response = await axios.post(`${import.meta.env.VITE_API}/poc/sc/savepocprjid`, formData, {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`

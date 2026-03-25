@@ -208,7 +208,7 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
                 handleAutoLogout();
                 return;
             }
-            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sales/getUsecases`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sc/getUsecases`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -251,7 +251,7 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
                 return;
             }
 
-            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sales/getLeads`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sc/getLeads`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -285,7 +285,7 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
             }
             const targetDate = date || new Date().toISOString().split('T')[0];
 
-            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sales/getStatusByDate?date=${targetDate}`, {
+            const response = await axios.get(`${import.meta.env.VITE_API}/poc/sc/getStatusByDate?date=${targetDate}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -397,8 +397,8 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
             };
 
             const url = editMode
-                ? `${import.meta.env.VITE_API}/poc/sales/empupdateStatus/${editId}`
-                : `${import.meta.env.VITE_API}/poc/sales/saveDailyStatus`;
+                ? `${import.meta.env.VITE_API}/poc/sc/empupdateStatus/${editId}`
+                : `${import.meta.env.VITE_API}/poc/sc/saveDailyStatus`;
 
             const method = editMode ? 'put' : 'post';
 
@@ -459,7 +459,7 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
                         handleAutoLogout();
                         return;
                     }
-                    await axios.delete(`${import.meta.env.VITE_API}/poc/sales/deleteStatus/${statusToDelete.id}`, {
+                    await axios.delete(`${import.meta.env.VITE_API}/poc/sc/deleteStatus/${statusToDelete.id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setSuccess('Status deleted successfully!');

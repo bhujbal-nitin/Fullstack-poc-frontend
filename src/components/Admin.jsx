@@ -52,7 +52,6 @@ import {
 } from '@mui/icons-material';
 
 const Admin = ({ onNavigate, onLogout, user }) => {
-    const [anchorEl, setAnchorEl] = useState(null);
     const [users, setUsers] = useState([]);
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -76,6 +75,8 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         sales_access: false,       // Initiate usecase
         sales_admin: false,         // View all sales usecases of members
         knowledge_base_access: false, // Add this line
+        knowledge_base_upload_access: false,
+        sales_report_card_access: false,
 
         // Sales Module Permissions
         status_status_access: false,
@@ -460,6 +461,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('Permissions data from API:', data);
                 setPermissionData({
                     // POC Module Permissions
                     status_access: data.status_access || false,
@@ -469,6 +471,8 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     sales_access: data.sales_access || false,
                     sales_admin: data.sales_admin || false,
                     knowledge_base_access: data.knowledge_base_access || false,
+                    knowledge_base_upload_access: data.knowledge_base_upload_access || false,
+                    sales_report_card_access: data.sales_report_card_access || false,
 
                     // Sales Module Permissions
                     status_status_access: data.status_status_access || false,
@@ -485,6 +489,8 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     sales_access: false,
                     sales_admin: false,
                     knowledge_base_access: false,
+                    knowledge_base_upload_access: false,
+                    sales_report_card_access: false, 
                     status_status_access: false,
                     sales_dashboard_access: false,
                     all_sales_access: false,
@@ -501,6 +507,8 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                 sales_access: false,
                 sales_admin: false,
                 knowledge_base_access: false,
+                knowledge_base_upload_access: false,
+                sales_report_card_access: false,
                 status_status_access: false,
                 sales_dashboard_access: false,
                 all_sales_access: false,
@@ -514,12 +522,6 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         setSelectedUser(null);
     };
 
-    const handlePermissionChange = (field) => (e) => {
-        setPermissionData(prev => ({
-            ...prev,
-            [field]: e.target.checked
-        }));
-    };
 
     const handleSavePermissions = async () => {
         try {
@@ -546,6 +548,8 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     sales_access: permissionData.sales_access,
                     sales_admin: permissionData.sales_admin,
                     knowledge_base_access: permissionData.knowledge_base_access,
+                    knowledge_base_upload_access: permissionData.knowledge_base_upload_access,
+                    sales_report_card_access: permissionData.sales_report_card_access,
 
                     // Sales Module Permissions
                     status_status_access: permissionData.status_status_access,
@@ -698,7 +702,9 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                     onChange={(e) => setDepartmentFilter(e.target.value)}
                                 >
                                     <MenuItem value="PCS ROW">POC Team</MenuItem>
-                                    <MenuItem value="sales">Sales Department</MenuItem>
+                                    <MenuItem value="SC(Solution Consultant)">SC(Solution Consultant)</MenuItem>  {/* Changed from 'sales' to 'sc' */}
+                                    <MenuItem value="sales">Sales Department</MenuItem>       {/* Kept as 'sales' */}
+                                    <MenuItem value="KB">Knowledge Base</MenuItem>
                                     <MenuItem value="all">All Departments</MenuItem>
                                 </Select>
                             </FormControl>
@@ -769,10 +775,29 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                     <TableCell>{user.email_id}</TableCell>
                                                     <TableCell>
                                                         <Chip
-                                                            label={user.department_name || 'N/A'}
+                                                            label={
+                                                                user.department_name === 'SC(Solution Consultant)'
+                                                                    ? 'SC(Solution Consultant)'
+                                                                    : user.department_name === 'sales'
+                                                                        ? 'Sales Department'
+                                                                        : user.department_name === 'PCS ROW'
+                                                                            ? 'POC Team'
+                                                                            : user.department_name === 'KB'
+                                                                                ? 'Knowledge Base'
+                                                                                : user.department_name || 'N/A'
+                                                            }
                                                             size="small"
-                                                            color={user.department_name === 'PCS ROW' ? 'primary' :
-                                                                user.department_name === 'sales' ? 'secondary' : 'default'}
+                                                            color={
+                                                                user.department_name === 'PCS ROW'
+                                                                    ? 'primary'
+                                                                    : user.department_name === 'SC(Solution Consultant)'
+                                                                        ? 'secondary'
+                                                                        : user.department_name === 'sales'
+                                                                            ? 'success'
+                                                                            : user.department_name === 'KB'
+                                                                                ? 'info'
+                                                                                : 'default'
+                                                            }
                                                         />
                                                     </TableCell>
                                                     <TableCell>
@@ -885,10 +910,30 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     <Grid item xs={12} sm={6} md={3}>
                         <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
                             <Typography variant="h6" color="primary">
+                                SC(Solution Consultant)
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                                {users.filter(u => u.department_name === 'SC(Solution Consultant)').length}  {/* Changed from 'sales' to 'sc' */}
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
+                            <Typography variant="h6" color="primary">
                                 Sales Department
                             </Typography>
                             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                                 {users.filter(u => u.department_name === 'sales').length}
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
+                            <Typography variant="h6" color="primary">
+                                Knowledge Base
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                                {users.filter(u => u.department_name === 'KB').length}  {/* Add this line */}
                             </Typography>
                         </Paper>
                     </Grid>
@@ -960,7 +1005,10 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                 required
                             >
                                 <MenuItem value="PCS ROW">POC Team (PCS ROW)</MenuItem>
-                                <MenuItem value="sales">Sales Department</MenuItem>
+                                <MenuItem value="SC(Solution Consultant)">SC(Solution Consultant)</MenuItem>  {/* Changed from 'sales' to 'sc' */}
+                                <MenuItem value="sales">Sales Department</MenuItem>       {/* Kept as 'sales' */}
+                                <MenuItem value="KB">Knowledge Base</MenuItem>
+
                             </Select>
                         </FormControl>
                         <FormControl fullWidth>
@@ -1043,13 +1091,15 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                 permissionData.usecase_creation_access === false &&
                                                 permissionData.report_access === false &&
                                                 permissionData.sales_access === false &&
-                                                permissionData.sales_admin === false ? "contained" : "outlined"}
+                                                permissionData.sales_admin === false &&
+                                                permissionData.knowledge_base_upload_access === false ? "contained" : "outlined"}
                                             color="primary"
                                             onClick={() => {
                                                 setPermissionData({
                                                     ...permissionData,
                                                     status_access: true,
                                                     knowledge_base_access: true,
+                                                    knowledge_base_upload_access: true,
                                                     all_status_access: false,
                                                     usecase_creation_access: false,
                                                     report_access: false,
@@ -1068,13 +1118,16 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                 permissionData.all_status_access === false &&
                                                 permissionData.report_access === false &&
                                                 permissionData.sales_access === false &&
-                                                permissionData.sales_admin === false ? "contained" : "outlined"}
+                                                permissionData.sales_admin === false &&
+                                                permissionData.knowledge_base_upload_access === true ? "contained" : "outlined"}
                                             color="primary"
                                             onClick={() => {
                                                 setPermissionData({
                                                     ...permissionData,
                                                     status_access: true,
                                                     usecase_creation_access: true,
+                                                    knowledge_base_access: true,
+                                                    knowledge_base_upload_access: true,
                                                     all_status_access: false,
                                                     report_access: false,
                                                     sales_access: false,
@@ -1092,7 +1145,9 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                 permissionData.usecase_creation_access === true &&
                                                 permissionData.report_access === true &&
                                                 permissionData.sales_access === true &&
-                                                permissionData.sales_admin === true ? "contained" : "outlined"}
+                                                permissionData.sales_admin === true &&
+                                                permissionData.knowledge_base_access === true &&
+                                                permissionData.knowledge_base_upload_access === true ? "contained" : "outlined"}
                                             color="primary"
                                             onClick={() => {
                                                 setPermissionData({
@@ -1102,7 +1157,9 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                     usecase_creation_access: true,
                                                     report_access: true,
                                                     sales_access: true,
-                                                    sales_admin: true
+                                                    sales_admin: true,
+                                                    knowledge_base_access: true,
+                                                    knowledge_base_upload_access: true
                                                 });
                                             }}
                                             sx={{ flex: 1 }}
@@ -1118,21 +1175,24 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                 permissionData.usecase_creation_access === false &&
                                                 permissionData.report_access === false &&
                                                 permissionData.sales_access === false &&
-                                                permissionData.sales_admin === false
+                                                permissionData.sales_admin === false &&
+                                                permissionData.knowledge_base_upload_access === true
                                                 ? " Developer Access"
                                                 : permissionData.status_access === true &&
                                                     permissionData.usecase_creation_access === true &&
                                                     permissionData.all_status_access === false &&
                                                     permissionData.report_access === false &&
                                                     permissionData.sales_access === false &&
-                                                    permissionData.sales_admin === false
+                                                    permissionData.sales_admin === false &&
+                                                    permissionData.knowledge_base_upload_access === true
                                                     ? " Manager Access"
                                                     : permissionData.status_access === true &&
                                                         permissionData.all_status_access === true &&
                                                         permissionData.usecase_creation_access === true &&
                                                         permissionData.report_access === true &&
                                                         permissionData.sales_access === true &&
-                                                        permissionData.sales_admin === true
+                                                        permissionData.sales_admin === true &&
+                                                        permissionData.knowledge_base_upload_access === true
                                                         ? " Admin Access"
                                                         : " Custom Access"
                                         }
@@ -1150,6 +1210,9 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             • Knowledge Base Access: {permissionData.knowledge_base_access ? "✅ Yes" : "❌ No"} {/* Add this line */}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • Knowledge Base Upload Access: {permissionData.knowledge_base_upload_access ? "✅ Yes" : "❌ No"} {/* Add this line */}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             • All Team Status Access: {permissionData.all_status_access ? "✅ Yes" : "❌ No"}
@@ -1170,7 +1233,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                 </>
                             )}
 
-                            {selectedUser.department_name === 'sales' && (
+                            {selectedUser.department_name === 'SC(Solution Consultant)' && (
                                 <>
                                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
                                         Sales Access Levels
@@ -1257,11 +1320,138 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                 </>
                             )}
 
-                            {selectedUser.department_name !== 'PCS ROW' && selectedUser.department_name !== 'sales' && (
-                                <Typography variant="body2" color="textSecondary">
-                                    No department-specific permissions defined for this department.
-                                </Typography>
+
+                            {/* New Sales Department */}
+                            {/* New Sales Department */}
+                            {selectedUser.department_name === 'sales' && (
+                                <>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                                        Sales Department Permissions
+                                    </Typography>
+
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={permissionData.knowledge_base_access}
+                                                    onChange={(e) => {
+                                                        setPermissionData({
+                                                            ...permissionData,
+                                                            knowledge_base_access: e.target.checked
+                                                        });
+                                                    }}
+                                                    color="primary"
+                                                />
+                                            }
+                                            label="Knowledge Base Access"
+                                        />
+
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={permissionData.sales_report_card_access || false}
+                                                    onChange={(e) => {
+                                                        setPermissionData({
+                                                            ...permissionData,
+                                                            sales_report_card_access: e.target.checked
+                                                        });
+                                                    }}
+                                                    color="primary"
+                                                />
+                                            }
+                                            label="Sales Report Card Access"
+                                        />
+
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={permissionData.sales_access}
+                                                    onChange={(e) => {
+                                                        setPermissionData({
+                                                            ...permissionData,
+                                                            sales_access: e.target.checked
+                                                        });
+                                                    }}
+                                                    color="primary"
+                                                />
+                                            }
+                                            label="Usecase Initiation Access"
+                                        />
+                                    </Box>
+
+                                    <Divider sx={{ my: 2 }} />
+
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                        Permission Status:
+                                    </Typography>
+
+                                    <Box sx={{ pl: 2 }}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • Knowledge Base Access: {permissionData.knowledge_base_access ? "✅ Enabled" : "❌ Disabled"}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • Sales Report Card Access: {permissionData.sales_report_card_access ? "✅ Enabled" : "❌ Disabled"}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • Sales Access: {permissionData.sales_access ? "✅ Enabled" : "❌ Disabled"}
+                                        </Typography>
+                                    </Box>
+                                </>
                             )}
+
+
+                            {selectedUser.department_name === 'KB' && (
+                                <>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                                        Knowledge Base Access
+                                    </Typography>
+
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                checked={permissionData.knowledge_base_access}
+                                                onChange={(e) => {
+                                                    const isChecked = e.target.checked;
+                                                    setPermissionData({
+                                                        ...permissionData,
+                                                        knowledge_base_access: isChecked,
+
+                                                    });
+                                                }}
+                                                color="primary"
+                                            />
+                                        }
+                                        label="Grant Knowledge Base Download Access"
+                                    />
+
+                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, ml: 4 }}>
+                                        {permissionData.knowledge_base_access
+                                            ? "User can access the Knowledge Base"
+                                            : "User cannot access the Knowledge Base"}
+                                    </Typography>
+
+                                    <Divider sx={{ my: 2 }} />
+
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                        Permission Status:
+                                    </Typography>
+
+                                    <Box sx={{ pl: 2 }}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • Knowledge Base Access: {permissionData.knowledge_base_access ? "✅ Enabled" : "❌ Disabled"}
+                                        </Typography>
+                                        {/* Status Access is not shown in UI but will be saved */}
+                                    </Box>
+                                </>
+                            )}
+
+                            {selectedUser.department_name !== 'PCS ROW' &&
+                                selectedUser.department_name !== 'sales' &&
+                                selectedUser.department_name !== 'KB' && (
+                                    <Typography variant="body2" color="textSecondary">
+                                        No department-specific permissions defined for this department.
+                                    </Typography>
+                                )}
                         </Box>
                     )}
                 </DialogContent>

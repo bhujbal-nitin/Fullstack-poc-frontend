@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
+import * as XLSX from "xlsx-js-style";
 import axios from "axios";
-import { Bar, Doughnut, Line, Pie } from "react-chartjs-2";
+import { Bar, Line, Pie } from "react-chartjs-2";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import 'chartjs-plugin-datalabels';
 import EmployeeReport from './EmployeeReport'; // Adjust path as needed
@@ -15,6 +16,7 @@ import {
   ArcElement,
   LineElement,
   PointElement,
+
 } from "chart.js";
 
 // Material-UI components
@@ -36,6 +38,15 @@ import {
   Divider,
   useTheme,
   useMediaQuery,     // Add this
+  Checkbox,
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText
 
 } from "@mui/material";
 import {
@@ -52,7 +63,8 @@ import {
   CheckCircle as CheckCircleIcon,
   PlayArrow as PlayArrowIcon,
   Warning as WarningIcon,
-  MonetizationOn as MonetizationOnIcon
+  MonetizationOn as MonetizationOnIcon,
+  Description as DescriptionIcon
 
 } from "@mui/icons-material";
 
@@ -141,7 +153,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const [endDate, setEndDate] = useState("");
   const [chartData, setChartData] = useState(null);
   const [statusChartData, setStatusChartData] = useState(null);
-  const [doughnutChartData, setDoughnutChartData] = useState(null);
   const [clientTypeChartData, setClientTypeChartData] = useState(null);
   const [clientTypePieChartData, setClientTypePieChartData] = useState(null);
   const [regionFilter, setRegionFilter] = useState("");
@@ -161,6 +172,26 @@ const Report = ({ onNavigate, onLogout, user }) => {
   const [monthlyChartData, setMonthlyChartData] = useState(null);
 
   const [salesPersonChartData, setSalesPersonChartData] = useState(null);
+
+  // Add these new state variables with other useState declarations
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+
+
+  const [clientTypeFilter, setClientTypeFilter] = useState({
+    Client: true,
+    Partner: true,
+    Internal: false
+  });
+
+  // Add this new state for All Usecase Report - all options checked by default
+  const [allReportClientTypeFilter, setAllReportClientTypeFilter] = useState({
+    Client: true,
+    Partner: true,
+    Internal: true  // Changed from false to true
+  });
+
+
 
   // Add with other useState declarations:
   const [showEmployeeReport, setShowEmployeeReport] = useState(false);
@@ -272,15 +303,25 @@ const Report = ({ onNavigate, onLogout, user }) => {
   useEffect(() => {
     updateChartData();
     updateStatusChartData();
-    updateDoughnutChartData();
     updateClientTypeChartData();
     updateClientTypePieChartData();
     updateOverdueUsecases();
     updateMonthlyChartData();
     updateSalesPersonChartData();
     updatePocConversionChartData();
-  }, [reports, startDate, endDate, pocTypes, statusTypes, regionFilter, pocTypeFilter, dateRange]);
-
+  }, [
+    reports,
+    startDate,
+    endDate,
+    pocTypes,
+    statusTypes,
+    regionFilter,
+    pocTypeFilter,
+    dateRange,
+    clientTypeFilter,
+    allReportClientTypeFilter,  // Add this for All Usecase Report
+    salesReportActive
+  ]);
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("authToken");
@@ -1257,63 +1298,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
     });
   };
 
-  const updateDoughnutChartData = () => {
-    const filtered = filterReports();
 
-    if (filtered.length === 0) {
-      setDoughnutChartData({
-        labels: ['No Data'],
-        datasets: [{
-          data: [1],
-          backgroundColor: ['rgba(200, 200, 200, 0.7)'],
-          borderColor: ['rgba(200, 200, 200, 1)'],
-          borderWidth: 2,
-        }]
-      });
-      return;
-    }
-
-    const labels = pocTypes.length > 0 ? pocTypes.slice(0, 6) : ['No Types'];
-    const typeCounts = {};
-    const uncategorized = [];
-
-    labels.forEach(type => {
-      typeCounts[type] = filtered.filter(report => {
-        const reportType = report.pocType || report.poc_type || 'Unknown';
-        if (reportType === type) {
-          return true;
-        }
-        return false;
-      }).length;
-    });
-
-    // find records that don't belong to any label
-    filtered.forEach(report => {
-      const reportType = report.pocType || report.poc_type || 'Unknown';
-      if (!labels.includes(reportType)) {
-        uncategorized.push(report);
-      }
-    });
-
-    // 👀 Print uncategorized records in console
-    if (uncategorized.length > 0) {
-      console.warn("Uncategorized Records:", uncategorized);
-    }
-
-    setDoughnutChartData({
-      labels: labels,
-      datasets: [{
-        data: Object.values(typeCounts),
-        backgroundColor: getVibrantColors(labels.length),
-        borderColor: getVibrantColors(labels.length).map(color => color.replace('0.9', '1')),
-        borderWidth: 3,
-        hoverOffset: 20,
-        cutout: '50%',
-        borderRadius: 10,
-        spacing: 3,
-      }]
-    });
-  };
 
   const updateClientTypeChartData = () => {
     const filtered = filterReports();
@@ -1449,51 +1434,42 @@ const Report = ({ onNavigate, onLogout, user }) => {
   };
 
   const filterReports = () => {
-    console.log('🔍 DEBUG filterReports called');
-    console.log('Start Date:', startDate);
-    console.log('End Date:', endDate);
-    console.log('Region Filter:', regionFilter);
-    console.log('POC Type Filter:', pocTypeFilter);
-    console.log('Total reports:', reports.length);
-
     const filtered = reports.filter(r => {
       let matchesDate = true;
       let matchesRegion = true;
       let matchesPocType = true;
+      let matchesClientType = true;
 
-      // DATE FILTERING - Apply date range logic
+      // DATE FILTER
       if (dateRange !== "all") {
         const reportStartDate = r.start_date ? new Date(r.start_date) : null;
 
         if (dateRange === "custom") {
-          // Custom date range
           if (startDate && endDate) {
             const filterStart = new Date(startDate);
             const filterEnd = new Date(endDate);
-            filterEnd.setHours(23, 59, 59, 999); // End of day
+            filterEnd.setHours(23, 59, 59, 999);
 
-            if (reportStartDate) {
-              matchesDate = reportStartDate >= filterStart && reportStartDate <= filterEnd;
-            } else {
-              matchesDate = false; // No date, exclude
-            }
+            matchesDate =
+              reportStartDate &&
+              reportStartDate >= filterStart &&
+              reportStartDate <= filterEnd;
           }
         } else {
-          // Predefined date ranges
           const today = new Date();
           let filterStart = new Date();
 
           switch (dateRange) {
-            case 'last30':
+            case "last30":
               filterStart.setDate(today.getDate() - 30);
               break;
-            case 'last90':
+            case "last90":
               filterStart.setDate(today.getDate() - 90);
               break;
-            case 'last180':
+            case "last180":
               filterStart.setDate(today.getDate() - 180);
               break;
-            case 'last365':
+            case "last365":
               filterStart.setDate(today.getDate() - 365);
               break;
             default:
@@ -1501,8 +1477,10 @@ const Report = ({ onNavigate, onLogout, user }) => {
           }
 
           if (filterStart && reportStartDate) {
-            filterStart.setHours(0, 0, 0, 0); // Start of day
-            matchesDate = reportStartDate >= filterStart && reportStartDate <= today;
+            filterStart.setHours(0, 0, 0, 0);
+            matchesDate =
+              reportStartDate >= filterStart &&
+              reportStartDate <= today;
           }
         }
       }
@@ -1518,42 +1496,37 @@ const Report = ({ onNavigate, onLogout, user }) => {
         matchesPocType = reportType === pocTypeFilter;
       }
 
-      return matchesDate && matchesRegion && matchesPocType;
+      // CLIENT TYPE FILTER - Use the appropriate filter based on report mode
+      const activeClientFilter = salesReportActive ? clientTypeFilter : allReportClientTypeFilter;
+
+      // Check if ANY client type checkbox is selected
+      const hasActiveClientFilter = activeClientFilter.Client || activeClientFilter.Partner || activeClientFilter.Internal;
+
+      // Get the report's client type (handle null/undefined/empty values)
+      const reportClientType = r.partner_client_own || '';
+
+      if (hasActiveClientFilter) {
+        // If at least one checkbox is selected, filter by the selected types
+        matchesClientType = (
+          (activeClientFilter.Client && reportClientType === 'Client') ||
+          (activeClientFilter.Partner && reportClientType === 'Partner') ||
+          (activeClientFilter.Internal && reportClientType === 'Internal')
+        );
+      } else {
+        // If NO checkboxes are selected (all false), show records with values OTHER than the 3 main types
+        matchesClientType = !['Client', 'Partner', 'Internal'].includes(reportClientType);
+      }
+
+      return (
+        matchesDate &&
+        matchesRegion &&
+        matchesPocType &&
+        matchesClientType
+      );
     });
 
-    console.log('Filtered reports count:', filtered.length);
     return filtered;
   };
-
-  const filterForMonthlyChart = () => {
-    // First apply main filters
-    let filtered = filterReports();
-
-    // Apply monthly-specific usecase type filter
-    if (monthChartFilter !== "all") {
-      filtered = filtered.filter(report => {
-        const reportType = report.pocType || report.poc_type || 'Unknown';
-        return reportType === monthChartFilter;
-      });
-    }
-
-    // Filter by month range (using start_date only)
-    if (monthRange > 0) {
-      const today = new Date();
-      const monthsAgo = new Date();
-      monthsAgo.setMonth(today.getMonth() - monthRange);
-
-      filtered = filtered.filter(report => {
-        if (!report.start_date) return false;
-        const reportDate = new Date(report.start_date);
-        return reportDate >= monthsAgo && reportDate <= today;
-      });
-    }
-
-    return filtered;
-  };
-
-
 
   const statusChartOptions = {
     ...chartOptions,
@@ -1756,7 +1729,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
       },
       datalabels: {
         display: true, // Ensure this is true
-        color: '#ffffff', // White for pie/doughnut
+        color: '#ffffff',
         font: {
           size: 11,
           weight: 'bold'
@@ -2045,6 +2018,7 @@ const Report = ({ onNavigate, onLogout, user }) => {
   };
 
   // Update the renderChart function to ensure proper options
+  // Update the renderChart function to ensure proper options and handle line charts
   const renderChart = (data, options) => {
     if (!data || !data.labels || data.labels.length === 0) {
       return (
@@ -2109,13 +2083,35 @@ const Report = ({ onNavigate, onLogout, user }) => {
       };
     }
 
-    // Rest of your renderChart function remains the same...
+    // Handle different chart types
     switch (chartType) {
-      case 'doughnut':
-      case 'pie':
-      // ... pie/doughnut chart code
       case 'line':
-      // ... line chart code
+        // For line charts, use the Line component
+        finalOptions.plugins.datalabels = {
+          ...finalOptions.plugins.datalabels,
+          anchor: 'end',
+          align: 'top',
+          offset: 10,
+          color: '#333333',
+          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+          borderRadius: 4,
+          padding: {
+            top: 2,
+            bottom: 2,
+            left: 4,
+            right: 4
+          },
+          font: {
+            size: 11,
+            weight: 'bold'
+          },
+          formatter: function (value) {
+            return value > 0 ? value : '';
+          }
+        };
+        return <Line data={data} options={finalOptions} />;
+
+      case 'bar':
       default:
         // For regular bar charts
         if (!isStackedBar) {
@@ -2138,6 +2134,529 @@ const Report = ({ onNavigate, onLogout, user }) => {
         return <Bar data={data} options={finalOptions} />;
     }
   };
+
+
+  // Add this function before the return statement
+  const exportFilteredData = (selectedOptions) => {
+    setExportLoading(true);
+
+    // Get all filtered reports
+    const filtered = filterReports();
+
+    // Filter reports based on selected options
+    let reportsToExport = [];
+
+    if (selectedOptions.total) {
+      // If Total is selected, include all filtered reports
+      reportsToExport = [...filtered];
+    } else {
+      // Otherwise, include based on individual selections
+
+      // Add regular completed (not converted)
+      if (selectedOptions.regularCompleted) {
+        const regularCompleted = filtered.filter(r => {
+          const status = r.status?.toLowerCase() || '';
+          return (status.includes('completed') || status.includes('done') || status.includes('success')) &&
+            !status.includes('converted');
+        });
+        reportsToExport = [...reportsToExport, ...regularCompleted];
+      }
+
+      // Add converted
+      if (selectedOptions.converted) {
+        const converted = filtered.filter(r => {
+          const status = r.status?.toLowerCase() || '';
+          return status.includes('converted');
+        });
+        reportsToExport = [...reportsToExport, ...converted];
+      }
+
+      // Add in progress
+      if (selectedOptions.inProgress) {
+        const inProgress = filtered.filter(r => {
+          const status = r.status?.toLowerCase() || '';
+          return status.includes('progress') || status.includes('ongoing');
+        });
+        reportsToExport = [...reportsToExport, ...inProgress];
+      }
+
+      // Add other (everything else not covered above)
+      if (selectedOptions.other) {
+        const other = filtered.filter(r => {
+          const status = r.status?.toLowerCase() || '';
+          const isCompleted = (status.includes('completed') || status.includes('done') || status.includes('success')) &&
+            !status.includes('converted');
+          const isConverted = status.includes('converted');
+          const isInProgress = status.includes('progress') || status.includes('ongoing');
+
+          return !isCompleted && !isConverted && !isInProgress;
+        });
+        reportsToExport = [...reportsToExport, ...other];
+      }
+
+      // Remove duplicates if any (though there shouldn't be any)
+      reportsToExport = reportsToExport.filter((report, index, self) =>
+        index === self.findIndex(r => r.id === report.id)
+      );
+    }
+
+    // Prepare the data for export (rest of your existing export code remains the same)
+    const exportData = reportsToExport.map(report => ({
+      // ... your existing export mapping code ...
+      'Usecase ID': report.id || '',
+      'Usecase Name': report.pocName || report.poc_prj_name || '',
+      'Company Name': report.entityName || report.companyName || '',
+      'Partner Name': report.partnerName || '',
+      'Description': report.description || report.usecase || '',
+      'Tags': report.tags || '',
+      'Usecase Type': report.pocType || report.poc_type || '',
+      'Customer Type': report.partner_client_own || '',
+      'Is Billable': report.isBillable || '',
+      'Status': report.status || '',
+      'Start Date': report.startDate || report.start_date || '',
+      'End Date': report.endDate || report.excepted_end_date || '',
+      'Actual Start Date': report.actualStartDate || '',
+      'Actual End Date': report.actualEndDate || '',
+      'Sales Person': report.salesPerson || report.sales_person || '',
+      'Assigned To': report.assignedTo || report.assigned_to || '',
+      'Created By': report.createdBy || '',
+      'Region': report.region || '',
+      'SPOC Email': report.spocEmail || '',
+      'SPOC Designation': report.spocDesignation || '',
+      'Estimated Efforts (Days)': report.estimatedEfforts || '',
+      'Total Worked Hours': report.totalWorkedHours || '',
+      'Variance Days': report.varianceDays || '',
+      'Approved By': report.approvedBy || '',
+      'Remark': report.remark || '',
+    }));
+
+
+    // Create Excel file
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+    const colWidths = [];
+    for (let i = range.s.c; i <= range.e.c; i++) {
+      colWidths.push({ wch: 25 });
+    }
+    ws['!cols'] = colWidths;
+
+    // Style the headers
+    for (let i = range.s.c; i <= range.e.c; i++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: i });
+      if (!ws[cellAddress]) continue;
+
+      ws[cellAddress].s = {
+        font: {
+          bold: true,
+          color: { rgb: "FF000000" }
+        },
+        fill: {
+          fgColor: { rgb: "FFFFFF00" }
+        },
+        alignment: {
+          horizontal: "center",
+          vertical: "center",
+          wrapText: true
+        },
+        border: {
+          top: { style: "thin", color: { rgb: "FF000000" } },
+          bottom: { style: "thin", color: { rgb: "FF000000" } },
+          left: { style: "thin", color: { rgb: "FF000000" } },
+          right: { style: "thin", color: { rgb: "FF000000" } }
+        }
+      };
+    }
+
+    // Style data rows
+    for (let R = range.s.r + 1; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+
+        if (!ws[cellAddress]) {
+          ws[cellAddress] = { t: 's', v: '' };
+        }
+
+        if (!ws[cellAddress].s) {
+          ws[cellAddress].s = {};
+        }
+
+        ws[cellAddress].s.border = {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        };
+
+        ws[cellAddress].s.alignment = {
+          horizontal: "left",
+          vertical: "center",
+          wrapText: true
+        };
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Reports');
+
+    const reportType = salesReportActive ? 'Sales_Report' : 'All_Usecase_Report';
+    const date = new Date().toISOString().split('T')[0];
+    const timestamp = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+    const filename = `${reportType}_${date}_${timestamp}_${reportsToExport.length}_records.xlsx`;
+
+    XLSX.writeFile(wb, filename);
+    setExportLoading(false);
+  };
+
+  // Add this new component for the Export Dialog
+  const ExportDialog = ({ open, onClose, onExport, counts, loading }) => {
+    const [selectedOptions, setSelectedOptions] = useState({
+      total: true,
+      completed: true,
+      regularCompleted: true,
+      converted: true,
+      inProgress: true,
+      other: true
+    });
+
+    // Reset state when dialog opens
+    useEffect(() => {
+      if (open) {
+        setSelectedOptions({
+          total: true,
+          completed: true,
+          regularCompleted: true,
+          converted: true,
+          inProgress: true,
+          other: true
+        });
+      }
+    }, [open]);
+
+    const handleSelectAll = () => {
+      setSelectedOptions({
+        total: true,
+        completed: true,
+        regularCompleted: true,
+        converted: true,
+        inProgress: true,
+        other: true
+      });
+    };
+
+    const handleClearAll = () => {
+      setSelectedOptions({
+        total: false,
+        completed: false,
+        regularCompleted: false,
+        converted: false,
+        inProgress: false,
+        other: false
+      });
+    };
+
+    const handleExport = () => {
+      // Pass the current selectedOptions to the export function
+      onExport(selectedOptions);
+      onClose();
+    };
+
+    const getSelectedRecordsCount = () => {
+      // If Total is selected, return all records
+      if (selectedOptions.total) {
+        return counts.total;
+      }
+
+      // Otherwise, sum up individual selections
+      let count = 0;
+
+      // Only count regularCompleted if it's selected AND not superseded by total
+      if (selectedOptions.regularCompleted) {
+        count += counts.regularCompleted;
+      }
+
+      // Only count converted if it's selected
+      if (selectedOptions.converted) {
+        count += counts.converted;
+      }
+
+      // Only count inProgress if it's selected
+      if (selectedOptions.inProgress) {
+        count += counts.inProgress;
+      }
+
+      // Only count other if it's selected
+      if (selectedOptions.other) {
+        count += counts.other;
+      }
+
+      return count;
+    };
+
+    // Calculate if any option is selected (for enabling export button)
+    const hasSelectedOptions = selectedOptions.total ||
+      selectedOptions.regularCompleted ||
+      selectedOptions.converted ||
+      selectedOptions.inProgress ||
+      selectedOptions.other;
+
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 'bold' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DescriptionIcon />
+            Export Usecases
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: 'text.secondary' }}>
+            Select records to export:
+          </Typography>
+
+          <List>
+            {/* Total Usecases */}
+            <ListItem
+              secondaryAction={
+                <Checkbox
+                  edge="end"
+                  checked={selectedOptions.total}
+                  onChange={(e) => {
+                    const newTotal = e.target.checked;
+                    setSelectedOptions({
+                      total: newTotal,
+                      completed: newTotal,
+                      regularCompleted: newTotal,
+                      converted: newTotal,
+                      inProgress: newTotal,
+                      other: newTotal
+                    });
+                  }}
+                />
+              }
+              sx={{ bgcolor: '#f5f5f5', borderRadius: 1, mb: 1 }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                    Total Usecases
+                  </Typography>
+                }
+                secondary={`${counts.total} records (All filtered records)`}
+              />
+            </ListItem>
+
+            {/* Completed (including converted) */}
+            <ListItem
+              secondaryAction={
+                <Checkbox
+                  edge="end"
+                  checked={selectedOptions.completed}
+                  onChange={(e) => {
+                    const newCompleted = e.target.checked;
+                    setSelectedOptions(prev => ({
+                      ...prev,
+                      total: false, // Uncheck total when manually selecting
+                      completed: newCompleted,
+                      // If unchecking completed, also uncheck its children
+                      regularCompleted: newCompleted ? prev.regularCompleted : false,
+                      converted: newCompleted ? prev.converted : false
+                    }));
+                  }}
+                />
+              }
+              sx={{ bgcolor: '#e8f5e8', borderRadius: 1, mb: 1, ml: 2 }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                    ✅ Completed (including Converted)
+                  </Typography>
+                }
+                secondary={`${counts.completed} records`}
+              />
+            </ListItem>
+
+            {/* Regular Completed (without converted) */}
+            <ListItem
+              secondaryAction={
+                <Checkbox
+                  edge="end"
+                  checked={selectedOptions.regularCompleted}
+                  onChange={(e) => {
+                    setSelectedOptions(prev => ({
+                      ...prev,
+                      total: false, // Uncheck total when manually selecting
+                      regularCompleted: e.target.checked,
+                      // If checking regularCompleted, ensure completed is checked
+                      completed: e.target.checked ? true : prev.completed
+                    }));
+                  }}
+                  disabled={!selectedOptions.completed && !selectedOptions.regularCompleted}
+                />
+              }
+              sx={{ ml: 4 }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body2" color="text.secondary">
+                    └─ Regular Completed
+                  </Typography>
+                }
+                secondary={`${counts.regularCompleted} records`}
+              />
+            </ListItem>
+
+            {/* Converted */}
+            <ListItem
+              secondaryAction={
+                <Checkbox
+                  edge="end"
+                  checked={selectedOptions.converted}
+                  onChange={(e) => {
+                    setSelectedOptions(prev => ({
+                      ...prev,
+                      total: false, // Uncheck total when manually selecting
+                      converted: e.target.checked,
+                      // If checking converted, ensure completed is checked
+                      completed: e.target.checked ? true : prev.completed
+                    }));
+                  }}
+                  disabled={!selectedOptions.completed && !selectedOptions.converted}
+                />
+              }
+              sx={{ ml: 4 }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body2" color="text.secondary">
+                    └─ Converted
+                  </Typography>
+                }
+                secondary={`${counts.converted} records`}
+              />
+            </ListItem>
+
+            {/* In Progress */}
+            <ListItem
+              secondaryAction={
+                <Checkbox
+                  edge="end"
+                  checked={selectedOptions.inProgress}
+                  onChange={(e) => {
+                    setSelectedOptions(prev => ({
+                      ...prev,
+                      total: false, // Uncheck total when manually selecting
+                      inProgress: e.target.checked
+                    }));
+                  }}
+                />
+              }
+              sx={{ bgcolor: '#fff3e0', borderRadius: 1, mt: 1, ml: 2 }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#ed6c02' }}>
+                    🔄 In Progress
+                  </Typography>
+                }
+                secondary={`${counts.inProgress} records`}
+              />
+            </ListItem>
+
+            {/* Other */}
+            {counts.other > 0 && (
+              <ListItem
+                secondaryAction={
+                  <Checkbox
+                    edge="end"
+                    checked={selectedOptions.other}
+                    onChange={(e) => {
+                      setSelectedOptions(prev => ({
+                        ...prev,
+                        total: false, // Uncheck total when manually selecting
+                        other: e.target.checked
+                      }));
+                    }}
+                  />
+                }
+                sx={{ bgcolor: '#f5f5f5', borderRadius: 1, mt: 1, ml: 2 }}
+              >
+                <ListItemText
+                  primary={
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#757575' }}>
+                      📌 Other
+                    </Typography>
+                  }
+                  secondary={`${counts.other} records (Draft, Dropped, Hold, etc.)`}
+                />
+              </ListItem>
+            )}
+          </List>
+
+          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 2 }}>
+            <Button size="small" onClick={handleSelectAll}>Select All</Button>
+            <Button size="small" onClick={handleClearAll}>Clear All</Button>
+          </Box>
+
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+          <Button onClick={onClose} variant="outlined">Cancel</Button>
+          <Button
+            onClick={handleExport}
+            variant="contained"
+            color="primary"
+            disabled={!hasSelectedOptions || loading}
+            startIcon={<DescriptionIcon />}
+          >
+            Export Selected ({getSelectedRecordsCount()} records)
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
+
+
+  // Add this function to get filtered counts for export dialog
+  const getExportCounts = () => {
+    const filtered = filterReports();
+
+    const regularCompleted = filtered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return (status.includes('completed') || status.includes('done') || status.includes('success')) &&
+        !status.includes('converted');
+    }).length;
+
+    const converted = filtered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('converted');
+    }).length;
+
+    const inProgress = filtered.filter(r => {
+      const status = r.status?.toLowerCase() || '';
+      return status.includes('progress') || status.includes('ongoing');
+    }).length;
+
+    const completedIncludingConverted = regularCompleted + converted;
+
+    // Calculate Other count (Total - Completed - In Progress)
+    const other = filtered.length - completedIncludingConverted - inProgress;
+
+    return {
+      total: filtered.length,
+      completed: completedIncludingConverted, // Completed including converted
+      regularCompleted: regularCompleted,
+      converted: converted,
+      inProgress: inProgress,
+      other: other > 0 ? other : 0 // Ensure non-negative
+    };
+  };
+
 
 
   return (
@@ -2175,12 +2694,18 @@ const Report = ({ onNavigate, onLogout, user }) => {
             color="inherit"
             onClick={() => {
               setShowEmployeeReport(false);
-              setSalesReportActive(false); // Already there
+              setSalesReportActive(false);
               setPocTypeFilter("");
               setDateRange("last365");
               setRegionFilter("");
               setStartDate("");
               setEndDate("");
+              // Reset All Report filters to default when switching to All Usecase Report
+              setAllReportClientTypeFilter({
+                Client: true,
+                Partner: true,
+                Internal: true
+              });
             }}
             variant="outlined"
             startIcon={<span>📊</span>}
@@ -2199,8 +2724,14 @@ const Report = ({ onNavigate, onLogout, user }) => {
             color="inherit"
             onClick={() => {
               setShowEmployeeReport(false);
-              setPocTypeFilter("POC");
+              setPocTypeFilter(""); // Changed from "POC" to "" (All Usecase Types)
               setSalesReportActive(true);
+              // Reset Sales Report filters to default when switching to Sales Report
+              setClientTypeFilter({
+                Client: true,
+                Partner: true,
+                Internal: false
+              });
               setDateRange("last365");
               setRegionFilter("");
               setStartDate("");
@@ -2388,29 +2919,129 @@ const Report = ({ onNavigate, onLogout, user }) => {
 
             {/* Chart Type Selector */}
             <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  📈 Chart Type:
-                </Typography>
-                {['bar', 'doughnut', 'line'].map((type) => (
-                  <Chip
-                    key={type}
-                    icon={type === 'bar' ? <BarChartIcon /> : type === 'doughnut' ? <PieChartIcon /> : <TrendingUpIcon />}
-                    label={type.charAt(0).toUpperCase() + type.slice(1)}
-                    onClick={() => setChartType(type)}
-                    color={chartType === type ? 'primary' : 'default'}
-                    variant={chartType === type ? 'filled' : 'outlined'}
-                    sx={{ fontWeight: 'bold' }}
-                  />
-                ))}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    📈 Chart Type:
+                  </Typography>
+                  {['bar', 'line'].map((type) => (
+                    <Chip
+                      key={type}
+                      icon={type === 'bar' ? <BarChartIcon /> : <TrendingUpIcon />}
+                      label={type.charAt(0).toUpperCase() + type.slice(1)}
+                      onClick={() => setChartType(type)}
+                      color={chartType === type ? 'primary' : 'default'}
+                      variant={chartType === type ? 'filled' : 'outlined'}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  ))}
+                </Box>
+
+                {/* Export Button */}
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<span>📊</span>}
+                  onClick={() => setExportDialogOpen(true)}
+                  sx={{
+                    fontWeight: 'bold',
+                    background: 'linear-gradient(135deg, #733df0 0%, #1d47ff 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #30396e 0%, #030c94 100%)'
+                    }
+                  }}
+                  disabled={filteredReports.length === 0}
+                >
+                  Export Excel ({filteredReports.length} records)
+                </Button>
+
               </Box>
             </Paper>
 
-            {/* Additional Usecase Type Filter - Added after first graph */}
+            {/* Additional Usecase Type Filter */}
             <Paper elevation={3} sx={{ p: 3, borderRadius: 3, background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: 'orange.800' }}>
                 🎯 Additional Usecase Type Filter
               </Typography>
+
+              {/* Filter by Type - Show in BOTH Sales Report AND All Usecase Report */}
+              <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    Filter by Type
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={salesReportActive ? clientTypeFilter.Client : allReportClientTypeFilter.Client}
+                          onChange={(e) => {
+                            if (salesReportActive) {
+                              setClientTypeFilter({
+                                ...clientTypeFilter,
+                                Client: e.target.checked
+                              });
+                            } else {
+                              setAllReportClientTypeFilter({
+                                ...allReportClientTypeFilter,
+                                Client: e.target.checked
+                              });
+                            }
+                          }}
+                        />
+                      }
+                      label="Client"
+                    />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={salesReportActive ? clientTypeFilter.Partner : allReportClientTypeFilter.Partner}
+                          onChange={(e) => {
+                            if (salesReportActive) {
+                              setClientTypeFilter({
+                                ...clientTypeFilter,
+                                Partner: e.target.checked
+                              });
+                            } else {
+                              setAllReportClientTypeFilter({
+                                ...allReportClientTypeFilter,
+                                Partner: e.target.checked
+                              });
+                            }
+                          }}
+                        />
+                      }
+                      label="Partner"
+                    />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={salesReportActive ? clientTypeFilter.Internal : allReportClientTypeFilter.Internal}
+                          onChange={(e) => {
+                            if (salesReportActive) {
+                              setClientTypeFilter({
+                                ...clientTypeFilter,
+                                Internal: e.target.checked
+                              });
+                            } else {
+                              setAllReportClientTypeFilter({
+                                ...allReportClientTypeFilter,
+                                Internal: e.target.checked
+                              });
+                            }
+                          }}
+                        />
+                      }
+                      label="Internal"
+                    />
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* Main filters row */}
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={6}>
                   <TextField
@@ -2420,7 +3051,6 @@ const Report = ({ onNavigate, onLogout, user }) => {
                     value={pocTypeFilter}
                     onChange={(e) => setPocTypeFilter(e.target.value)}
                     sx={{ minWidth: 220 }}
-                  // REMOVED: disabled={salesReportActive}
                   >
                     <MenuItem value="">All Usecase Types</MenuItem>
                     {pocTypes.map((type) => (
@@ -2430,8 +3060,9 @@ const Report = ({ onNavigate, onLogout, user }) => {
                     ))}
                   </TextField>
                 </Grid>
+
                 <Grid item xs={12} md={6}>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
                     <Chip
                       label={`📊 Total Filtered: ${filteredReports.length}`}
                       color="primary"
@@ -2714,6 +3345,15 @@ const Report = ({ onNavigate, onLogout, user }) => {
           </>
         )}
       </Box>
+
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        onExport={exportFilteredData}
+        counts={getExportCounts()}
+        loading={exportLoading}
+      />
+
     </Box>
   );
 };

@@ -120,7 +120,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         'Event',
         'Workshop',
         'Support',
-        'Vco Create'
+        'Vco Create',
+        'KnowledgeTransfer'
     ];
 
     // Function to get emp_name from localStorage
@@ -284,7 +285,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -294,7 +295,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 // setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 // setCreatedByOptions(['admin', 'manager', 'user']);
                 // setApproverOptions(['admin', 'manager', 'supervisor']);
-                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -942,7 +943,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                     'Event',
                                     'Workshop',
                                     'Support',
-                                    'Vco Create'
+                                    'Vco Create',
+                                    'Knowledge Transfer'
                                 ]}
                                 value={pocType}
                                 onChange={setPocType}

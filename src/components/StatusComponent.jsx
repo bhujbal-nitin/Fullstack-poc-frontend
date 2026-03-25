@@ -455,7 +455,8 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             comp_off: 'Comp Off',
             leave_without_pay: 'Leave Without Pay',
             maternity: 'Maternity Leave',
-            paternity: 'Paternity Leave'
+            paternity: 'Paternity Leave',
+            optional: 'Optional Leave'
         };
         return typeMap[type] || type;
     };
@@ -685,7 +686,8 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         { value: 'Comp Off', label: 'Comp Off' },
         { value: 'Leave Without Pay', label: 'Leave Without Pay' },
         { value: 'Maternity Leave', label: 'Maternity Leave' },
-        { value: 'Paternity Leave', label: 'Paternity Leave' }
+        { value: 'Paternity Leave', label: 'Paternity Leave' },
+        { value: 'Optional Leave', label: 'Optional Leave' }
     ];
 
 
@@ -3166,7 +3168,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                                         )}
 
                                                                         <Typography variant="body1" fontWeight="bold" color="primary" noWrap>
-                                                                            {leave.leave_type?.charAt(0).toUpperCase() + leave.leave_type?.slice(1).replace(/_/g, ' ') || 'Unknown'} Leave
+                                                                            {leave.leave_type?.charAt(0).toUpperCase() + leave.leave_type?.slice(1).replace(/_/g, ' ') || 'Unknown'}
                                                                         </Typography>
 
                                                                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>

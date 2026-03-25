@@ -318,7 +318,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                         return;
                     }
 
-                    const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/sales/getAllAssignTo`, {
+                    const assignToResponse = await axios.get(`${import.meta.env.VITE_API}/poc/sc/getAllAssignTo`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         },
@@ -512,7 +512,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     return;
                 }
 
-                const response = await axios.put(`${import.meta.env.VITE_API}/poc/sales/update/${poc.pocId}`, formData, {
+                const response = await axios.put(`${import.meta.env.VITE_API}/poc/sc/update/${poc.pocId}`, formData, {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`

@@ -116,7 +116,8 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         'Event',
         'Workshop',
         'Support',
-        'Vco Create'
+        'Vco Create',
+        'KnowledgeTransfer'
     ];
 
     // Function to get emp_name from localStorage
@@ -237,7 +238,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -246,7 +247,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
                 setUsers([]);
                 setCreatedByOptions([]);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -538,7 +539,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             }}
                         >
                             <Dropdown
-                                label="Usecase Type"
+                                label="Usecase Id"
                                 options={idPrefixOptions}
                                 value={idPrefix}
                                 onChange={setIdPrefix}
@@ -842,7 +843,8 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                     'Event',
                                     'Workshop',
                                     'Support',
-                                    'Vco Create'
+                                    'Vco Create',
+                                    'Knowledge Transfer'
                                 ]}
                                 value={pocType}
                                 onChange={setPocType}
@@ -902,8 +904,6 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                             rows={3}
                             icon={<DescriptionIcon />}
                         />
-
-
                     </Box>
                 );
 

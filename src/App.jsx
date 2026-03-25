@@ -15,6 +15,7 @@ import InitiateUsecaseEdit from './components/InitiateUsecaseEdit';
 import SalesTable from "./components/sales/SalesTable";
 import SalesStatusComponent from "./components/sales/SalesStatusComponent";
 import KnowledgeBase from "./components/KnowledgeBase";
+import ReportSales from "./components/ReportSales";
 
 import {
   AppBar,
@@ -601,18 +602,18 @@ function AppContent() {
           }
         />
 
-        {/* <Route
-          path="/employee-report"
+        <Route
+          path="/sales-report"
           element={
             <ProtectedRoute>
-              <EmployeeReport
+              <ReportSales
                 onNavigate={navigateTo}
                 onLogout={handleLogout}
                 user={currentUser}
               />
             </ProtectedRoute>
           }
-        /> */}
+        />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
