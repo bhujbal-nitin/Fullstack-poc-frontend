@@ -65,6 +65,7 @@ import {
     Description as DescriptionIcon
 
 } from "@mui/icons-material";
+import UsecaseListDialog from './UsecaseListDialog';
 
 
 
@@ -95,19 +96,22 @@ function TabPanel(props) {
 }
 
 // StatCard Component for Grafana-style cards
-const StatCard = ({ title, value, icon, color, subtitle }) => (
-    <Card sx={{
-        background: `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`,
-        color: 'white',
-        borderRadius: 3,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-        height: '100%',
-        transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-        '&:hover': {
-            transform: 'translateY(-4px)',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
-        }
-    }}>
+const StatCard = ({ title, value, icon, color, subtitle, onClick }) => (
+    <Card
+        onClick={onClick}
+        sx={{
+            background: `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`,
+            color: 'white',
+            borderRadius: 3,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            height: '100%',
+            cursor: onClick ? 'pointer' : 'default',
+            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+            '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
+            }
+        }}>
         <CardContent sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
@@ -163,6 +167,9 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
     const [salesPersonsConversionRate, setSalesPersonsConversionRate] = useState({});
     // Add this with other useState declarations:
     const [salesReportActive, setSalesReportActive] = useState(true);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [dialogTitle, setDialogTitle] = useState("");
+    const [dialogData, setDialogData] = useState([]);
 
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -1859,6 +1866,49 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
         ? Math.round((convertedPocs / completedIncludingConverted) * 100)
         : 0;
 
+    const handleCardClick = (type) => {
+        let title = '';
+        let data = [];
+
+        switch (type) {
+            case 'total':
+                title = 'Total Usecases';
+                data = filteredReports;
+                break;
+            case 'completed':
+                title = 'Completed Usecases';
+                data = filteredReports.filter(r => {
+                    const status = r.status?.toLowerCase() || '';
+                    return status.includes('completed') || status.includes('done') || status.includes('success') || status.includes('converted');
+                });
+                break;
+            case 'inProgress':
+                title = 'In Progress Usecases';
+                data = filteredReports.filter(r => {
+                    const status = r.status?.toLowerCase() || '';
+                    return status.includes('progress') || status.includes('ongoing');
+                });
+                break;
+            case 'converted':
+                title = 'Converted Usecases';
+                data = filteredReports.filter(r => {
+                    const status = r.status?.toLowerCase() || '';
+                    return status.includes('converted');
+                });
+                break;
+            case 'clientType':
+                title = 'Client Type Usecases';
+                data = filteredReports.filter(r => r.partner_client_own);
+                break;
+            default:
+                break;
+        }
+
+        setDialogTitle(title);
+        setDialogData(data);
+        setDialogOpen(true);
+    };
+
     // Add this function before the return statement
     const getTotalLabelsPlugin = {
         id: 'totalLabels',
@@ -2189,6 +2239,7 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                 icon={<DashboardIcon sx={{ fontSize: 30 }} />}
                                 color="#0061ff"
                                 subtitle="All active projects"
+                                onClick={() => handleCardClick('total')}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
@@ -2198,17 +2249,10 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                 icon={<CheckCircleIcon sx={{ fontSize: 30 }} />}
                                 color="#32a852"
                                 subtitle={`${conversionRate}% conversion rate`}
+                                onClick={() => handleCardClick('completed')}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <StatCard
-                                title="In Progress"
-                                value={inProgressPocs}
-                                icon={<PlayArrowIcon sx={{ fontSize: 30 }} />}
-                                color="#ff9f1c"
-                                subtitle="Active development"
-                            />
-                        </Grid>
+
 
                         {pocTypeFilter === "POC" && (
                             <Grid item xs={12} sm={6} md={3}>
@@ -2221,6 +2265,7 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                         `Of ${getPocFilteredCompletedCount()} completed\n` +
                                         `${getPocFilteredConversionRate()}% conversion rate`
                                     }
+                                    onClick={() => handleCardClick('converted')}
                                 />
                             </Grid>
                         )}
@@ -2235,7 +2280,12 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                 display: 'flex',
                                 flexDirection: 'column',
                                 minHeight: '140px',
-                                color: 'white'
+                                color: 'white',
+                                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                                '&:hover': {
+                                    transform: 'translateY(-4px)',
+                                    boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
+                                }
                             }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                                     <Box>
@@ -2273,6 +2323,31 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                                 data={clientTypePieChartData}
                                                 options={{
                                                     ...clientTypePieChartOptions,
+                                                    onHover: (event, elements) => {
+                                                        const target = event.native ? event.native.target : event.target;
+                                                        if (target) {
+                                                            target.style.cursor = elements && elements.length > 0 ? 'pointer' : 'default';
+                                                        }
+                                                    },
+                                                    onClick: (event, elements, chart) => {
+                                                        if (elements.length > 0) {
+                                                            const element = elements[0];
+                                                            const index = element.index;
+
+                                                            const clientTypeLabel = chart.data.labels[index];
+
+                                                            const dataForClientType = filteredReports.filter(report => {
+                                                                // Matching the fallback priority used previously
+                                                                let type = report.partner_client_own || report.client_type || report.clientType || 'N/A';
+                                                                if (type === 'N/A' || !type.trim()) type = 'Unknown';
+                                                                return type === clientTypeLabel;
+                                                            });
+
+                                                            setDialogTitle(`Client Type - ${clientTypeLabel} Usecases`);
+                                                            setDialogData(dataForClientType);
+                                                            setDialogOpen(true);
+                                                        }
+                                                    },
                                                     plugins: {
                                                         ...clientTypePieChartOptions.plugins,
                                                         legend: {
@@ -2575,7 +2650,59 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                         {salesPersonChartData ? (
                                             <Bar
                                                 data={createSalesPersonChartWithTotals()}
-                                                options={salesPersonChartOptions}
+                                                options={{
+                                                    ...salesPersonChartOptions,
+                                                    onHover: (event, elements, chart) => {
+                                                        const target = event.native ? event.native.target : event.target;
+                                                        if (target) {
+                                                            const evt = event.native || event;
+                                                            const colElements = chart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
+                                                            target.style.cursor = colElements && colElements.length ? 'pointer' : 'default';
+                                                        }
+                                                    },
+                                                    onClick: (event, elements, chart) => {
+                                                        if (elements.length > 0) {
+                                                            // Clicked directly on a specific status bar segment
+                                                            const element = elements[0];
+                                                            const datasetIndex = element.datasetIndex;
+                                                            const index = element.index;
+
+                                                            const salesPerson = chart.data.labels[index];
+                                                            const status = chart.data.datasets[datasetIndex].label;
+
+                                                            if (status === 'Total' || !status) return;
+
+                                                            const dataForStatus = filteredReports.filter(r => {
+                                                                const rSp = r.sales_person || r.salesPerson || 'Unknown';
+                                                                const rStatus = r.status || 'Unknown';
+                                                                return rSp === salesPerson && rStatus === status;
+                                                            });
+
+                                                            setDialogTitle(`${salesPerson} - ${status} Usecases`);
+                                                            setDialogData(dataForStatus);
+                                                            setDialogOpen(true);
+                                                        } else {
+                                                            // Clicked somewhere in the vertical column (e.g., on the custom Total label)
+                                                            const evt = event.native || event;
+                                                            const colElements = chart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
+
+                                                            if (colElements.length > 0) {
+                                                                const index = colElements[0].index;
+                                                                const salesPerson = chart.data.labels[index];
+
+                                                                // Filter all usecases for just this sales person
+                                                                const dataForPerson = filteredReports.filter(r => {
+                                                                    const rSp = r.sales_person || r.salesPerson || 'Unknown';
+                                                                    return rSp === salesPerson;
+                                                                });
+
+                                                                setDialogTitle(`${salesPerson} - Total Usecases`);
+                                                                setDialogData(dataForPerson);
+                                                                setDialogOpen(true);
+                                                            }
+                                                        }
+                                                    }
+                                                }}
                                             />
                                         ) : (
                                             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
@@ -2601,7 +2728,48 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                                                 🎯 {pocTypeFilter || "ALL"} CONVERSION BY SALES PERSON
                                             </Typography>
                                             {pocConversionChartData && pocConversionChartData.labels && pocConversionChartData.labels.length > 0 ? (
-                                                renderChart(pocConversionChartData, pocConversionChartOptions)
+                                                renderChart(pocConversionChartData, {
+                                                    ...pocConversionChartOptions,
+                                                    onHover: (event, elements) => {
+                                                        const target = event.native ? event.native.target : event.target;
+                                                        if (target) {
+                                                            target.style.cursor = elements && elements.length > 0 ? 'pointer' : 'default';
+                                                        }
+                                                    },
+                                                    onClick: (event, elements, chart) => {
+                                                        if (elements.length > 0) {
+                                                            const element = elements[0];
+                                                            const datasetIndex = element.datasetIndex;
+                                                            const index = element.index;
+
+                                                            const salesPerson = chart.data.labels[index];
+                                                            const statusLabel = chart.data.datasets[datasetIndex].label;
+
+                                                            const finalPocType = pocTypeFilter || 'ALL';
+
+                                                            const dataForStatus = filteredReports.filter(r => {
+                                                                const sp = r.sales_person || r.salesPerson || 'Unknown';
+                                                                if (sp !== salesPerson) return false;
+
+                                                                const pt = r.poc_type || r.pocType || 'Unknown';
+                                                                if (finalPocType !== 'ALL' && pt !== finalPocType) return false;
+
+                                                                const st = r.status?.toLowerCase() || '';
+
+                                                                if (statusLabel.includes('Completed') || statusLabel.includes('Total')) {
+                                                                    return ['completed', 'done', 'success', 'converted'].some(kw => st.includes(kw));
+                                                                } else if (statusLabel.includes('Converted')) {
+                                                                    return st.includes('converted');
+                                                                }
+                                                                return false;
+                                                            });
+
+                                                            setDialogTitle(`${salesPerson} - ${statusLabel} (${finalPocType})`);
+                                                            setDialogData(dataForStatus);
+                                                            setDialogOpen(true);
+                                                        }
+                                                    }
+                                                })
                                             ) : (
                                                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                                                     <Typography variant="h5" color="text.secondary">
@@ -2618,6 +2786,14 @@ const ReportSales = ({ onNavigate, onLogout, user }) => {
                 </>
             </Box>
 
+            <UsecaseListDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                title={dialogTitle}
+                data={dialogData}
+                showExport={false}
+                isSalesReport={true}
+            />
         </Box>
     );
 };

@@ -73,6 +73,13 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
   const [endDate, setEndDate] = useState('');
   const [remark, setRemark] = useState('');
   const [region, setRegion] = useState('');
+  const [industryType, setIndustryType] = useState('');
+  const [meetingMode, setMeetingMode] = useState('');
+  const [callType, setCallType] = useState('');
+  const [logoWin, setLogoWin] = useState('');
+  const [hsLink, setHsLink] = useState('');
+  const [rfpDate, setRfpDate] = useState('');
+  const [clientNewExisting, setClientNewExisting] = useState('');
   //const [isBillable, setIsBillable] = useState('');
   const [pocType, setPocType] = useState('');
   const [spocEmail, setSpocEmail] = useState('');
@@ -159,7 +166,30 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     action();
   }, [handleAutoLogout]);
 
+  // Safe form submission handler
+  // const safeSubmit = React.useCallback((e) => {
+  //   const token = localStorage.getItem('authToken');
 
+  //   if (!token || isTokenExpired(token)) {
+  //     handleAutoLogout();
+  //     return;
+  //   }
+
+  //   handleSubmit(e);
+  // }, [handleAutoLogout]);
+
+  const safeSubmit = React.useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation(); // ✅ prevent native submit
+
+    const token = localStorage.getItem('authToken');
+    if (!token || isTokenExpired(token)) {
+      handleAutoLogout();
+      return;
+    }
+
+    handleSubmit(e);
+  }, [handleAutoLogout]);
   // ID prefix options
   const idPrefixOptions = [
     'Solution-Consultation',
@@ -285,11 +315,29 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
               department_name: departmentName
             }
           });
-          const assignToData = processApiData(assignToResponse.data);
-          setUsers(assignToData.length > 0 ? assignToData : ['admin', 'manager', 'developer', 'tester', 'analyst']);
+          let assignToData = processApiData(assignToResponse.data);
+          if (assignToData.length === 0) {
+            assignToData = ['admin', 'manager', 'developer', 'tester', 'analyst'];
+          }
+          if (emp_name && assignToData.length > 0) {
+            const index = assignToData.findIndex(u => u.toLowerCase() === emp_name.toLowerCase());
+            if (index > -1) {
+              const [matched] = assignToData.splice(index, 1);
+              assignToData = [matched, ...assignToData];
+            }
+          }
+          setUsers(assignToData);
         } catch (assignToError) {
           console.error('Error fetching assigned to options:', assignToError);
-          setUsers([]);
+          let fallbackUsers = ['admin', 'manager', 'developer', 'tester', 'analyst'];
+          if (emp_name && fallbackUsers.length > 0) {
+            const index = fallbackUsers.findIndex(u => u.toLowerCase() === emp_name.toLowerCase());
+            if (index > -1) {
+              const [matched] = fallbackUsers.splice(index, 1);
+              fallbackUsers = [matched, ...fallbackUsers];
+            }
+          }
+          setUsers(fallbackUsers);
         }
 
 
@@ -381,14 +429,20 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     setSelectedUsers([]);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    // Token check
+    const token = localStorage.getItem('authToken');
+    if (!token || isTokenExpired(token)) {
+      handleAutoLogout();
+      return;
+    }
 
     // Validation
     const newErrors = {};
     if (!idPrefix) newErrors.idPrefix = 'ID Prefix is required';
     if (!pocName) newErrors.pocName = 'Usecase Name is required';
     if (!entityType) newErrors.entityType = 'Client Type is required';
+    if (!clientNewExisting) newErrors.clientNewExisting = 'Client New/Existing is required';
     if (!entityName) newErrors.entityName = 'Company Name is required';
     if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
     if (!salesPerson) newErrors.salesPerson = 'Sales Person is required';
@@ -398,76 +452,77 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     if (!endDate) newErrors.endDate = 'End Date is required';
     if (!region) newErrors.region = 'Region is required';
 
-
-    if (tags.length === 0) newErrors.tags = 'At least one tag is required';
-
     setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return; // stop if errors
 
-    if (Object.keys(newErrors).length === 0) {
-      setLoading(true);
+    setLoading(true);
 
-      try {
-        // Prepare form data
-        const formData = {
-          pocId: idPrefix,
-          pocName,
-          entityType,
-          entityName,
-          partnerName: entityType === 'Partner' ? partnerName : '',
-          salesPerson,
-          description,
-          assignedTo: assignedTo.join(','),
-          createdBy: createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : ''),
-          startDate,
-          endDate,
-          remark,
-          region,
-          // isBillable: isBillable === 'Yes',
-          pocType,
-          spocEmail,
-          spocDesignation,
-          tags: tags.join(',')
-        };
-        console.log(formData);
+    try {
+      const formData = {
+        pocId: idPrefix,
+        pocName,
+        entityType,
+        entityName,
+        partnerName: entityType === 'Partner' ? partnerName : '',
+        salesPerson,
+        description,
+        assignedTo: assignedTo.join(','),
+        createdBy: createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : ''),
+        startDate,
+        endDate,
+        remark,
+        region,
+        industryType,
+        meetingMode,
+        callType,
+        logoWin,
+        hsLink,
+        rfpDate,
+        pocType,
+        clientNewExisting,
+        spocEmail,
+        spocDesignation,
+        tags: tags.join(',')
+      };
 
-        const token = localStorage.getItem('authToken');
+      console.log('Submitting formData:', formData);
 
-        if (!token || isTokenExpired(token)) {
-          handleAutoLogout();
-          return;
-        }
-
-
-
-        const response = await axios.post(`${import.meta.env.VITE_API}/poc/sc/savepocprjid`, formData, {
+      const response = await axios.post(
+        `${import.meta.env.VITE_API}/poc/sc/savepocprjid`,
+        formData,
+        {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           }
-        });
+        }
+      );
 
-        // Fix the response handling - check for success message instead of success property
-        // Fix the response handling - check for success message instead of success property
-        if (response.data && (response.data.success || response.data.message === 'POC saved successfully' || response.data.message === 'Usecase saved successfully')) {
-          alert('Usecase Code created successfully!');
-          resetForm();
-          if (onSuccess) {
-            onSuccess(); // This should refresh the table data
-          }
-          onClose(); // Close the form dialog
-        } else {
-          alert('Failed to create Usecase Code: ' + (response.data.message || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error saving Usecase Code:', error);
-        if (error.response?.status === 401) {
-          alert('Session expired. Please login again.');
-        } else {
-          alert('Error saving Usecase Code. Please try again.');
-        }
-      } finally {
-        setLoading(false);
+      if (
+        response.data &&
+        (
+          response.data.success ||
+          response.data.message === 'POC saved successfully' ||
+          response.data.message === 'Usecase saved successfully'
+        )
+      ) {
+        alert('Usecase Code created successfully!');
+        resetForm();
+        if (onSuccess) onSuccess();
+        onClose();
+      } else {
+        alert('Failed to create Usecase Code: ' + (response.data.message || 'Unknown error'));
       }
+
+    } catch (error) {
+      console.error('Error saving Usecase Code:', error);
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+      } else {
+        alert('Error saving Usecase Code. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
   const resetForm = () => {
@@ -478,13 +533,20 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     setEntityName('');
     setPartnerName('');
     setSalesPerson('');
-    setDescription('');
+    setRfpDate('');
+    setClientNewExisting('');
     setAssignedTo([]);
     setCreatedBy('');
     setStartDate('');
     setEndDate('');
     setRemark('');
     setRegion('');
+    setIndustryType('');
+    setMeetingMode('');
+    setCallType('');
+    setLogoWin('');
+    setHsLink('');
+    setRfpDate('');
     // setIsBillable('');
     setPocType('');
     setSpocEmail('');
@@ -602,13 +664,13 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
                 gap: 2,
               }}
             >
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Usecase Type *
+                  Task Type *
                 </Typography>
                 <Dropdown
                   options={idPrefixOptions}
@@ -632,6 +694,20 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   error={errors.pocName}
                   placeholder="Enter name"
                   required
+                  fullWidth
+                  size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Industry Type
+                </Typography>
+                <Dropdown
+                  options={['BFSI', 'IT', 'Logistics', 'Manufacturing', 'Real Estate', 'Retail and E-commerce', 'Shipping', 'Telecommunications', 'Healthcare', 'Education', 'Media & Entertainment', 'Govt Authorities', 'Airline', 'Other',]}
+                  value={industryType}
+                  onChange={setIndustryType}
+                  placeholder="Select"
                   fullWidth
                   size="small"
                 />
@@ -790,7 +866,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr 1fr" },
                 gap: 1.5,
               }}
             >
@@ -799,7 +875,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   Client Type *
                 </Typography>
                 <Dropdown
-                  options={["Partner", "Client", "Internal"]}
+                  options={["Partner", "Client", "Internal", "Prospect"]}
                   value={entityType}
                   onChange={setEntityType}
                   error={errors.entityType}
@@ -811,7 +887,22 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
 
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  End Client Name *
+                  Client New/Existing *
+                </Typography>
+                <Dropdown
+                  options={["New", "Existing"]}
+                  value={clientNewExisting}
+                  onChange={setClientNewExisting}
+                  error={errors.clientNewExisting}
+                  placeholder="-- Select --"
+                  required
+                  size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Client Name *
                 </Typography>
                 <TextInput
                   value={entityName}
@@ -990,6 +1081,84 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                 </Box>
               )}
             </Box>
+
+            {/* Meeting Details Section */}
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>
+              Meeting details
+            </Typography>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
+                gap: 1.5,
+              }}
+            >
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Mode of Meeting
+                </Typography>
+                <Dropdown
+                  options={['Online', 'In person']}
+                  value={meetingMode}
+                  onChange={setMeetingMode}
+                  placeholder="Select"
+                  size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Call Type
+                </Typography>
+                <Dropdown
+                  options={['Fresh', 'Follow up']}
+                  value={callType}
+                  onChange={setCallType}
+                  placeholder="Select"
+                  size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Logo Win
+                </Typography>
+                <Dropdown
+                  options={['Yes', 'No']}
+                  value={logoWin}
+                  onChange={setLogoWin}
+                  placeholder="Select"
+                  size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  HS Link
+                </Typography>
+                <TextInput
+                  value={hsLink}
+                  onChange={setHsLink}
+                  placeholder="Enter HS Link"
+                  size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  RFP date
+                </Typography>
+                <input
+                  type="date"
+                  value={rfpDate}
+                  onChange={(e) => setRfpDate(e.target.value)}
+                  className="compact-date-input"
+                  style={{
+                    borderColor: '#ddd'
+                  }}
+                />
+              </Box>
+            </Box>
           </Box>
         );
 
@@ -1119,34 +1288,29 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                     Next
                   </Button>
                 ) : null}
+
+                {/* Submit button - Only show on last step */}
+                {activeStep === steps.length - 1 && (
+                  <Button
+                    type="button"
+                    variant="contained"
+                    onClick={handleSubmit}
+                    disabled={apiLoading || loading}
+                    startIcon={<CheckCircleIcon />}
+                    sx={{
+                      backgroundColor: '#1976d2',
+                      '&:hover': { backgroundColor: '#1565c0' },
+                      minWidth: '200px'
+                    }}
+                  >
+                    {loading ? 'Creating Usecase...' : 'Create Usecase'}
+                  </Button>
+                )}
               </Box>
             </Box>
           )}
         </form>
       </Paper>
-
-      {/* Submit button - Only show on last step */}
-      {activeStep === steps.length - 1 && (
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            type="submit"
-            variant="contained"
-            loading={loading}
-            disabled={apiLoading}
-            onClick={() => safeAction(handleSubmit)}
-            startIcon={<CheckCircleIcon />}
-            sx={{
-              backgroundColor: '#1976d2',
-              '&:hover': {
-                backgroundColor: '#1565c0'
-              },
-              minWidth: '200px'
-            }}
-          >
-            {loading ? 'Creating Usecase...' : 'Create Usecase'}
-          </Button>
-        </Box>
-      )}
 
       {/* Multi-User Selection Dialog */}
       <Dialog

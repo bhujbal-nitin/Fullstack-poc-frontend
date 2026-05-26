@@ -33,7 +33,8 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
     status_status_access: false,
     admin_access: false,
     knowledge_base_access: true,
-    sales_report_card_access: false
+    sales_report_card_access: false,
+    sc_report_access: false
   });
   const [loading, setLoading] = useState(true);
   const [activeDashboard, setActiveDashboard] = useState('');
@@ -434,9 +435,41 @@ const Dashboard = ({ onNavigate, onLogout, user }) => {
         </div>
       )}
 
+      {/* Knowledge Base */}
+      {permissions.knowledge_base_access && (
+        <div className="card knowledge-card" onClick={() => safeNavigate('knowledge-base')}>
+          <div className="card-icon">
+            <MenuBook className="icon-knowledge" />
+          </div>
+          <div className="card-content">
+            <h3>Knowledge Base</h3>
+            <p>Access documentation and guides</p>
+            <div className="card-footer">
+              <span className="card-tag">Resources</span>
+              <span className="card-arrow">→</span>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* SC Report */}
+      {permissions.sc_report_access && (
+        <div className="card report-card" onClick={() => safeNavigate('sc-report')}>
+          <div className="card-icon">
+            <Assessment className="icon-report" />
+          </div>
+          <div className="card-content">
+            <h3>SC Report</h3>
+            <p>View SC reports and analytics</p>
+            <div className="card-footer">
+              <span className="card-tag">Analytics</span>
+              <span className="card-arrow">→</span>
+            </div>
+          </div>
+        </div>
+      )}
 
 
-      {!permissions.sales_dashboard_access && !permissions.status_status_access && (
+      {!permissions.sales_dashboard_access && !permissions.status_status_access && !permissions.knowledge_base_access && (
         <div className="no-access-card">
           <div className="no-access-content">
             <div className="no-access-icon">🔒</div>

@@ -16,6 +16,7 @@ import SalesTable from "./components/sales/SalesTable";
 import SalesStatusComponent from "./components/sales/SalesStatusComponent";
 import KnowledgeBase from "./components/KnowledgeBase";
 import ReportSales from "./components/ReportSales";
+import SCReport from "./components/sales/SCReport";
 
 import {
   AppBar,
@@ -607,6 +608,19 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <ReportSales
+                onNavigate={navigateTo}
+                onLogout={handleLogout}
+                user={currentUser}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/sc-report"
+          element={
+            <ProtectedRoute>
+              <SCReport
                 onNavigate={navigateTo}
                 onLogout={handleLogout}
                 user={currentUser}

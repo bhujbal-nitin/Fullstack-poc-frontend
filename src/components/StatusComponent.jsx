@@ -81,6 +81,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'; // Use this consistently
 import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
+dayjs.extend(isBetween);
 
 
 
@@ -714,6 +716,15 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         return lastWorkingDay;
     };
 
+    // Helper: formats a Date (or date string) to local YYYY-MM-DD (avoids UTC timezone shift)
+    const toLocalDateStr = (date) => {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
 
     const handleLeaveInputChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -1155,7 +1166,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         setStatusData({
             date: formatDateToYYYYMMDD(status.date),
             usecaseId: status.usecaseId || usecases.find(u => u.name === status.usecaseName)?.id || '',
-            leadIds: status.leadIds ? (Array.isArray(status.leadIds) ? status.leadIds : status.leadIds.split(',')) : [],
+            leadIds: status.leadIds ? (Array.isArray(status.leadIds) ? status.leadIds : status.leadIds.split(',')).filter(id => id && id.toString().trim() !== '') : [],
             status: status.status,
             workingHours: status.workingHours?.toString() || '',
             workingMinutes: status.workingMinutes?.toString() || '',
@@ -1231,14 +1242,19 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            const formattedUsecases = Array.isArray(response.data) ? response.data.map(usecase => ({
-                id: usecase.poc_prj_id,
-                name: `${usecase.client_name} - ${usecase.poc_prj_name}`,
-                client_name: usecase.client_name,
-                poc_prj_name: usecase.poc_prj_name,
-                poc_prj_id: usecase.poc_prj_id,
-                rawData: usecase
-            })) : [];
+            const formattedUsecases = Array.isArray(response.data) ? response.data.map(usecase => {
+                const effectiveClient = (usecase.client_name && usecase.client_name !== 'NA')
+                    ? usecase.client_name
+                    : (usecase.partner_name || 'NA');
+                return {
+                    id: usecase.poc_prj_id,
+                    name: `${effectiveClient} - ${usecase.poc_prj_name}`,
+                    client_name: effectiveClient,
+                    poc_prj_name: usecase.poc_prj_name,
+                    poc_prj_id: usecase.poc_prj_id,
+                    rawData: usecase
+                };
+            }) : [];
 
             setUsecases(formattedUsecases);
         } catch (error) {
@@ -1371,9 +1387,10 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
     const handleLeadChange = (event) => {
         const { value } = event.target;
+        const normalizedValue = typeof value === 'string' ? value.split(',') : value;
         setStatusData(prev => ({
             ...prev,
-            leadIds: typeof value === 'string' ? value.split(',') : value,
+            leadIds: normalizedValue.filter(id => id && id.toString().trim() !== ''),
         }));
     };
 
@@ -1398,9 +1415,23 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
         if (!statusData.workingHours && !statusData.workingMinutes) {
             setError('Please enter working hours or minutes');
-            setLoading(false);
+            setStatusLoading(false); // Fixed: was setLoading(false)
             return;
         }
+
+        // --- BACKDATED STATUS RESTRICTION ---
+        if (!userPermissions?.all_status_access) {
+            // Use local date strings to avoid UTC timezone shift (important for IST +5:30)
+            const targetDate = toLocalDateStr(statusData.date);
+            const lastWorkingDay = toLocalDateStr(getLastWorkingDay());
+
+            if (targetDate < lastWorkingDay) {
+                setError('You do not have permission to create or edit status older than the last working day.');
+                setStatusLoading(false);
+                return;
+            }
+        }
+        // ------------------------------------
 
         try {
             const selectedUsecase = usecases.find(u => u.id == statusData.usecaseId);
@@ -1455,7 +1486,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         setStatusData({
             date: formatDateToYYYYMMDD(status.date),
             usecaseId: status.usecaseId || usecases.find(u => u.name === status.usecaseName)?.id || '',
-            leadIds: status.leadIds ? (Array.isArray(status.leadIds) ? status.leadIds : status.leadIds.split(',')) : [],
+            leadIds: status.leadIds ? (Array.isArray(status.leadIds) ? status.leadIds : status.leadIds.split(',')).filter(id => id && id.toString().trim() !== '') : [],
             status: status.status,
             workingHours: status.workingHours?.toString() || '',
             workingMinutes: status.workingMinutes?.toString() || '',
@@ -1483,6 +1514,21 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
     const handleDeleteConfirm = async () => {
         if (statusToDelete) {
+            // --- BACKDATED STATUS RESTRICTION ---
+            if (!userPermissions?.all_status_access) {
+                // Use local date strings to avoid UTC timezone shift (important for IST +5:30)
+                const targetDate = toLocalDateStr(statusToDelete.date);
+                const lastWorkingDay = toLocalDateStr(getLastWorkingDay());
+
+                if (targetDate < lastWorkingDay) {
+                    setError('You do not have permission to delete status older than the last working day.');
+                    setDeleteDialogOpen(false);
+                    setStatusToDelete(null);
+                    return;
+                }
+            }
+            // ------------------------------------
+
             try {
                 const token = localStorage.getItem('authToken');
                 await axios.delete(`${import.meta.env.VITE_API}/poc/deleteStatus/${statusToDelete.id}`, {
@@ -1787,7 +1833,11 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                         onChange={handleInputChange}
                                                         InputLabelProps={{ shrink: true }}
                                                         inputProps={{
-                                                            max: new Date().toISOString().split('T')[0]
+                                                            max: toLocalDateStr(new Date()),
+                                                            // Non-admin users cannot select dates before the last working day
+                                                            ...(userPermissions?.all_status_access ? {} : {
+                                                                min: toLocalDateStr(getLastWorkingDay())
+                                                            })
                                                         }}
                                                         required
                                                         size={isMobile ? "small" : "medium"}
@@ -2619,30 +2669,48 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                     <TableCell>
                                                         <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                             {/* Only show edit/delete for own records OR if user has all access */}
-                                                            {(userPermissions.all_status_access || status.employeeId === user?.emp_id) && (
-                                                                <>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        onClick={() => handleEditFromDialog(status)}
-                                                                        sx={{
-                                                                            bgcolor: 'primary.light',
-                                                                            '&:hover': { bgcolor: 'primary.main' },
-                                                                        }}
-                                                                    >
-                                                                        <EditIcon sx={{ color: 'white', fontSize: 14 }} />
-                                                                    </IconButton>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        onClick={() => handleDeleteFromDialog(status)}
-                                                                        sx={{
-                                                                            bgcolor: 'error.light',
-                                                                            '&:hover': { bgcolor: 'error.main' },
-                                                                        }}
-                                                                    >
-                                                                        <DeleteIcon sx={{ color: 'white', fontSize: 14 }} />
-                                                                    </IconButton>
-                                                                </>
-                                                            )}
+                                                            {(userPermissions.all_status_access || status.employeeId === user?.emp_id) && (() => {
+                                                                // Use local date strings to avoid UTC timezone shift (important for IST +5:30)
+                                                                const statusDate = toLocalDateStr(status.date);
+                                                                const lastWD = toLocalDateStr(getLastWorkingDay());
+                                                                const isBackdated = !userPermissions.all_status_access && statusDate < lastWD;
+                                                                return (
+                                                                    <>
+                                                                        <Tooltip title={isBackdated ? 'Cannot edit backdated status' : 'Edit'} arrow>
+                                                                            <span>
+                                                                                <IconButton
+                                                                                    size="small"
+                                                                                    disabled={isBackdated}
+                                                                                    onClick={() => handleEditFromDialog(status)}
+                                                                                    sx={{
+                                                                                        bgcolor: isBackdated ? 'grey.300' : 'primary.light',
+                                                                                        '&:hover': { bgcolor: isBackdated ? 'grey.300' : 'primary.main' },
+                                                                                        '&.Mui-disabled': { bgcolor: 'grey.200' }
+                                                                                    }}
+                                                                                >
+                                                                                    <EditIcon sx={{ color: isBackdated ? 'grey.400' : 'white', fontSize: 14 }} />
+                                                                                </IconButton>
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                        <Tooltip title={isBackdated ? 'Cannot delete backdated status' : 'Delete'} arrow>
+                                                                            <span>
+                                                                                <IconButton
+                                                                                    size="small"
+                                                                                    disabled={isBackdated}
+                                                                                    onClick={() => handleDeleteFromDialog(status)}
+                                                                                    sx={{
+                                                                                        bgcolor: isBackdated ? 'grey.300' : 'error.light',
+                                                                                        '&:hover': { bgcolor: isBackdated ? 'grey.300' : 'error.main' },
+                                                                                        '&.Mui-disabled': { bgcolor: 'grey.200' }
+                                                                                    }}
+                                                                                >
+                                                                                    <DeleteIcon sx={{ color: isBackdated ? 'grey.400' : 'white', fontSize: 14 }} />
+                                                                                </IconButton>
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                             {/* Show read-only message only for users with no access at all */}
                                                             {!userPermissions.all_status_access &&
                                                                 !userPermissions.status_access &&
@@ -3024,13 +3092,15 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                 display: 'grid',
                                                 gridTemplateColumns: 'repeat(7, 1fr)',
                                                 gap: 1.5,
-                                                mb: 3, // Changed from 1 to 3 for more vertical space
+                                                mb: 3,
                                                 flexShrink: 0
                                             }}>
                                                 {getCalendarDays(currentMonth).map((date, index) => {
                                                     const isCurrentMonth = date.month() === currentMonth.month();
                                                     const isToday = date.isSame(dayjs(), 'day');
                                                     const leaveCount = getLeaveCountForDate(date);
+                                                    const dayOfWeek = date.day(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+                                                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
 
                                                     return (
                                                         <Box
@@ -3065,17 +3135,28 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                                         minHeight: '36px',
                                                                         padding: 0,
                                                                         borderRadius: '50%',
-                                                                        bgcolor: isToday ? 'rgb(71, 236, 134)' :
-                                                                            (leaveCount > 0 ? '#ffebee' : 'transparent'),
-                                                                        color: isCurrentMonth ? 'text.primary' : 'text.disabled',
-                                                                        borderColor: isToday ? 'primary.main' : 'grey.300',
+                                                                        bgcolor: isWeekend ? '#baeff8ff' : // Light orange background for weekends
+                                                                            (isToday ? 'rgb(71, 236, 134)' :
+                                                                                (leaveCount > 0 ? '#ffebee' : 'transparent')),
+                                                                        color: isCurrentMonth ?
+                                                                            (isWeekend ? '#E65100' : 'text.primary') : // Orange text for weekend days
+                                                                            'text.disabled',
+                                                                        borderColor: isToday ? 'primary.main' :
+                                                                            (isWeekend ? '#FFB74D' : 'grey.300'),
                                                                         borderWidth: isToday ? 2 : 1,
                                                                         '&:hover': {
-                                                                            bgcolor: leaveCount > 0 ? '#ffcdd2' : '#f5f5f5'
+                                                                            bgcolor: isWeekend ? '#FFE0B2' : // Darker orange on hover for weekends
+                                                                                (leaveCount > 0 ? '#ffcdd2' : '#f5f5f5')
                                                                         }
                                                                     }}
                                                                 >
-                                                                    <Typography variant="body2" fontWeight={isToday ? 'bold' : 'normal'}>
+                                                                    <Typography
+                                                                        variant="body2"
+                                                                        fontWeight={isToday ? 'bold' : 'normal'}
+                                                                        sx={{
+                                                                            color: isWeekend && !date.isSame(selectedLeaveDate, 'day') ? '#E65100' : 'inherit'
+                                                                        }}
+                                                                    >
                                                                         {date.date()}
                                                                     </Typography>
                                                                 </Button>
@@ -3133,7 +3214,7 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                                                             gap: 2,
                                                             width: '100%'
                                                         }}>
-                                                            {leaveDetails.map((leave, index) => (
+                                                            {filteredLeaves.map((leave, index) => (
                                                                 <Card
                                                                     key={index}
                                                                     sx={{
@@ -3543,9 +3624,6 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
                             </Button>
                         </DialogActions>
                     </Dialog>
-
-
-
                 </Box >
             </LocalizationProvider>
         );

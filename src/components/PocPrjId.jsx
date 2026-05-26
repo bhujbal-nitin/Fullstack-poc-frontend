@@ -37,7 +37,8 @@ import {
     InputAdornment,
     Tooltip,
     Alert,
-    CircularProgress
+    CircularProgress,
+    TextField
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -54,7 +55,8 @@ import {
     Assignment as AssignmentIcon,
     CheckCircle as CheckCircleIcon,
     Add as AddIcon,
-    Remove as RemoveIcon
+    Remove as RemoveIcon,
+    Search as SearchIcon
 } from '@mui/icons-material';
 
 const PocPrjId = ({ onClose, onSuccess, onBack }) => {
@@ -85,6 +87,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     // Multi-user selection dialog
     const [userDialogOpen, setUserDialogOpen] = useState(false);
     const [selectedUsers, setSelectedUsers] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Dropdown options
     const [salesPersons, setSalesPersons] = useState([]);
@@ -238,7 +241,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'UI', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -314,7 +317,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         if (!idPrefix) newErrors.idPrefix = 'ID Prefix is required';
         if (!pocName) newErrors.pocName = 'Usecase Name is required';
         if (!entityType) newErrors.entityType = 'Client Type is required';
-        if (!entityName) newErrors.entityName = 'Company Name is required';
+        if (!entityName) newErrors.entityName = 'Client Name is required';
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
         if (!salesPerson) newErrors.salesPerson = 'Sales Person is required';
         if (assignedTo.length === 0) newErrors.assignedTo = 'At least one user must be assigned';
@@ -452,7 +455,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                     stepValid = false;
                 }
                 if (!entityName) {
-                    newErrors.entityName = 'Company Name is required';
+                    newErrors.entityName = 'Client Name is required';
                     stepValid = false;
                 }
                 if (entityType === 'Partner' && !partnerName) {
@@ -583,7 +586,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
             case 1:
                 return (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        {/* Row 1: Client Type + Company Name + Partner Name */}
+                        {/* Row 1: Client Type + Client Name + Partner Name */}
                         <Box
                             sx={{
                                 display: "grid",
@@ -607,7 +610,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                 value={entityName}
                                 onChange={setEntityName}
                                 error={errors.entityName}
-                                placeholder="Enter Company Name"
+                                placeholder="Enter Client Name"
                                 required
                                 icon={<BusinessIcon />}
                             />
@@ -1028,9 +1031,29 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                         </Button>
                     </Box>
 
+                    <Box sx={{ mb: 2 }}>
+                        <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Search users..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="action" />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                    </Box>
+
 
                     <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                        {users.map((user, index) => {
+                        {users.filter(user => {
+                            const userStr = typeof user === 'string' ? user : (user?.name || user?.email || String(user));
+                            return userStr.toLowerCase().includes(searchQuery.toLowerCase());
+                        }).map((user, index) => {
                             // Get user data - user could be object or string (for fallback)
                             const userEmail = user.email || user;
                             const userName = user.name || user.email || user;

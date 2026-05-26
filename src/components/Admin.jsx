@@ -78,11 +78,10 @@ const Admin = ({ onNavigate, onLogout, user }) => {
         knowledge_base_upload_access: false,
         sales_report_card_access: false,
 
-        // Sales Module Permissions
         status_status_access: false,
         sales_dashboard_access: false,
         all_sales_access: false,
-
+        sc_report_access: false,
     });
 
     const logoutInProgress = React.useRef(false);
@@ -478,6 +477,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     status_status_access: data.status_status_access || false,
                     sales_dashboard_access: data.sales_dashboard_access || false,
                     all_sales_access: data.all_sales_access || false,
+                    sc_report_access: data.sc_report_access || false,
                 });
             } else {
                 // Initialize with defaults if no permissions found
@@ -494,6 +494,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     status_status_access: false,
                     sales_dashboard_access: false,
                     all_sales_access: false,
+                    sc_report_access: false,
                 });
             }
         } catch (error) {
@@ -512,6 +513,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                 status_status_access: false,
                 sales_dashboard_access: false,
                 all_sales_access: false,
+                sc_report_access: false,
             });
         }
         setOpenPermissionDialog(true);
@@ -555,6 +557,7 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                     status_status_access: permissionData.status_status_access,
                     sales_dashboard_access: permissionData.sales_dashboard_access,
                     all_sales_access: permissionData.all_sales_access,
+                    sc_report_access: permissionData.sc_report_access,
                 })
             });
 
@@ -1282,7 +1285,8 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                                     ...permissionData,
                                                     status_status_access: true,
                                                     sales_dashboard_access: true,
-                                                    all_sales_access: true
+                                                    all_sales_access: true,
+                                                    sc_report_access: true
                                                 });
                                             }}
                                             sx={{ flex: 1 }}
@@ -1316,6 +1320,21 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                         <Typography variant="body2" color="text.secondary">
                                             • All Usecase Access: {permissionData.all_sales_access ? "✅ Yes" : "❌ No"}
                                         </Typography>
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={permissionData.sc_report_access || false}
+                                                    onChange={(e) => {
+                                                        setPermissionData({
+                                                            ...permissionData,
+                                                            sc_report_access: e.target.checked
+                                                        });
+                                                    }}
+                                                    color="primary"
+                                                />
+                                            }
+                                            label="SC Report Access"
+                                        />
                                     </Box>
                                 </>
                             )}
@@ -1377,6 +1396,22 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                             }
                                             label="Usecase Initiation Access"
                                         />
+
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={permissionData.sc_report_access || false}
+                                                    onChange={(e) => {
+                                                        setPermissionData({
+                                                            ...permissionData,
+                                                            sc_report_access: e.target.checked
+                                                        });
+                                                    }}
+                                                    color="primary"
+                                                />
+                                            }
+                                            label="SC Report Access"
+                                        />
                                     </Box>
 
                                     <Divider sx={{ my: 2 }} />
@@ -1394,6 +1429,9 @@ const Admin = ({ onNavigate, onLogout, user }) => {
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             • Sales Access: {permissionData.sales_access ? "✅ Enabled" : "❌ Disabled"}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            • SC Report Access: {permissionData.sc_report_access ? "✅ Enabled" : "❌ Disabled"}
                                         </Typography>
                                     </Box>
                                 </>

@@ -31,7 +31,9 @@ import {
     Stepper,
     Step,
     StepLabel,
-    CircularProgress
+    CircularProgress,
+    TextField,
+    InputAdornment
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -48,7 +50,8 @@ import {
     Assignment as AssignmentIcon,
     CheckCircle as CheckCircleIcon,
     Add as AddIcon,
-    Remove as RemoveIcon
+    Remove as RemoveIcon,
+    Search as SearchIcon
 } from '@mui/icons-material';
 
 const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
@@ -87,6 +90,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     // Multi-user selection dialog
     const [userDialogOpen, setUserDialogOpen] = useState(false);
     const [selectedUsers, setSelectedUsers] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Dropdown options
     const [salesPersons, setSalesPersons] = useState([]);
@@ -285,7 +289,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -295,7 +299,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 // setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 // setCreatedByOptions(['admin', 'manager', 'user']);
                 // setApproverOptions(['admin', 'manager', 'supervisor']);
-                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'Other']);
+                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -348,7 +352,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         if (!idPrefix) newErrors.idPrefix = 'ID Prefix is required';
         if (!pocName) newErrors.pocName = 'Usecase Name is required';
         if (!entityType) newErrors.entityType = 'Client Type is required';
-        if (!entityName) newErrors.entityName = 'Company Name is required';
+        if (!entityName) newErrors.entityName = 'Client Name is required';
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
         if (!salesPerson) newErrors.salesPerson = 'Sales Person is required';
         if (assignedTo.length === 0) newErrors.assignedTo = 'At least one user must be assigned';
@@ -489,7 +493,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     stepValid = false;
                 }
                 if (!entityName) {
-                    newErrors.entityName = 'Company Name is required';
+                    newErrors.entityName = 'Client Name is required';
                     stepValid = false;
                 }
                 if (entityType === 'Partner' && !partnerName) {
@@ -644,7 +648,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 value={entityName}
                                 onChange={setEntityName}
                                 error={errors.entityName}
-                                placeholder="Enter Company Name"
+                                placeholder="Enter Client Name"
                                 required
                                 icon={<BusinessIcon />}
                             />
@@ -1162,11 +1166,30 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             Deselect All
                         </Button>
                     </Box>
+                    <Box sx={{ mb: 2 }}>
+                        <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Search users..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="action" />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                    </Box>
 
                     <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                        {users.map((user, index) => {
+                        {users.filter(user => {
+                            const userStr = typeof user === 'string' ? user : (user?.name || user?.email || String(user));
+                            return userStr.toLowerCase().includes(searchQuery.toLowerCase());
+                        }).map((user, index) => {
                             // Get the actual email from API response
-                            const userEmail = user.email || user;
+                            const userEmail = typeof user === 'string' ? user : (user.email || user.name || user);
 
                             // Get the display name for avatar
                             const userName = user.name || user.email || user;

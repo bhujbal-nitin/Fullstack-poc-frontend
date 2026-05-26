@@ -297,8 +297,14 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
         tags: false,
         createdBy: false,
         estimatedEfforts: false,
-        approvedBy: false,
         totalEfforts: false,
+        industryType: false,
+        meetingMode: false,
+        callType: false,
+        logoWin: false,
+        hsLink: false,
+        rfpDate: false,
+        clientNewExisting: false,
 
     });
 
@@ -324,8 +330,14 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
         actualStartDate: '',
         actualEndDate: '',
         estimatedEfforts: '',
-        approvedBy: '',
         totalEfforts: '',
+        industryType: '',
+        meetingMode: '',
+        callType: '',
+        logoWin: '',
+        hsLink: '',
+        rfpDate: '',
+        clientNewExisting: '',
 
         remark: '',
         totalWorkedHours: ''
@@ -406,7 +418,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
         pocType: { label: 'Type', truncate: 15 },
         entityName: { label: 'Company Name', truncate: 15 },
         pocName: { label: 'Usecase Name', truncate: 20 },
-        assignedTo: { label: 'Assigned To', truncate: false },
+        assignedTo: { label: 'Assigned To', truncate: 25 },
         startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
         endDate: { label: 'End Date', truncate: false, render: (poc) => formatDate(poc.endDate) },
         actualStartDate: { label: 'Actual Start Date', truncate: false, render: (poc) => formatDate(poc.actualStartDate) },
@@ -502,6 +514,13 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
         entityType: { label: 'Client Type', truncate: false },
         salesPerson: { label: 'Sales Person', truncate: false },
         region: { label: 'Region', truncate: false },
+        industryType: { label: 'Industry Type', truncate: 15 },
+        meetingMode: { label: 'Mode of Meeting', truncate: false },
+        callType: { label: 'Call Type', truncate: false },
+        logoWin: { label: 'Logo Win', truncate: false },
+        hsLink: { label: 'HS Link', truncate: 20 },
+        rfpDate: { label: 'RFP date', truncate: false, render: (poc) => formatDate(poc.rfpDate) },
+        clientNewExisting: { label: 'Client New/Existing', truncate: false },
 
 
         description: { label: 'Description', truncate: 25 },
@@ -521,7 +540,6 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                 </Typography>
             )
         },
-        approvedBy: { label: 'Approved By', truncate: false },
         totalEfforts: {
             label: 'Total Efforts',
             truncate: false,
@@ -600,9 +618,16 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                     return true;
                 }
 
-                if (column.includes('Date') && pocValue) {
-                    const date = new Date(pocValue).toLocaleDateString();
-                    return date.includes(filterValue);
+                if ((column.includes('Date') || ['startDate', 'endDate', 'actualStartDate', 'actualEndDate', 'rfpDate'].includes(column)) && pocValue) {
+                    try {
+                        const dateObj = new Date(filterValue + 'T00:00:00');
+                        if (isNaN(dateObj.getTime())) return false;
+                        const filterFormatted = dateObj.toLocaleDateString();
+                        const pocFormatted = new Date(pocValue).toLocaleDateString();
+                        return pocFormatted === filterFormatted;
+                    } catch (e) {
+                        return false;
+                    }
                 }
 
                 return pocValue.toString().toLowerCase().includes(filterValue.toLowerCase());
@@ -1322,7 +1347,18 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                                                                             ))
                                                                         ) : (
                                                                             <Chip
-                                                                                label={columnFilters[key]}
+                                                                                label={
+                                                                                    (['startDate', 'endDate', 'actualStartDate', 'actualEndDate', 'rfpDate'].includes(key) && columnFilters[key])
+                                                                                        ? (() => {
+                                                                                            try {
+                                                                                                const d = new Date(columnFilters[key] + 'T00:00:00');
+                                                                                                return isNaN(d.getTime()) ? columnFilters[key] : d.toLocaleDateString();
+                                                                                            } catch (e) {
+                                                                                                return columnFilters[key];
+                                                                                            }
+                                                                                        })()
+                                                                                        : columnFilters[key]
+                                                                                }
                                                                                 size="small"
                                                                                 onDelete={() => handleClearColumnFilter(key)}
                                                                                 sx={{
@@ -1530,6 +1566,16 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                                 <MenuItem value="false">Non-Billable</MenuItem>
                             </Select>
                         </FormControl>
+                    ) : ['startDate', 'endDate', 'actualStartDate', 'actualEndDate', 'rfpDate'].includes(currentFilterColumn) ? (
+                        <TextField
+                            fullWidth
+                            size="small"
+                            type="date"
+                            variant="outlined"
+                            InputLabelProps={{ shrink: true }}
+                            value={columnFilters[currentFilterColumn]}
+                            onChange={(e) => handleColumnFilterChange(currentFilterColumn, e.target.value)}
+                        />
                     ) : (
                         <TextField
                             fullWidth
@@ -1670,10 +1716,17 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Project Name" value={selectedPoc.pocName} />
                             <DetailItem label="Description" value={selectedPoc.description || '-'} />
                             <DetailItem label="Client Type" value={selectedPoc.entityType} />
+                            <DetailItem label="Client New/Existing" value={selectedPoc.clientNewExisting || '-'} />
                             <DetailItem label="Usecase Type" value={selectedPoc.pocType} />
-                            <DetailItem label="Company Name" value={selectedPoc.entityName} />
+                            <DetailItem label="Client Name" value={selectedPoc.entityName} />
                             <DetailItem label="Sales Person" value={selectedPoc.salesPerson} />
                             <DetailItem label="Region" value={selectedPoc.region} />
+                            <DetailItem label="Industry Type" value={selectedPoc.industryType || '-'} />
+                            <DetailItem label="Mode of Meeting" value={selectedPoc.meetingMode || '-'} />
+                            <DetailItem label="Call Type" value={selectedPoc.callType || '-'} />
+                            <DetailItem label="Logo Win" value={selectedPoc.logoWin || '-'} />
+                            <DetailItem label="HS Link" value={selectedPoc.hsLink || '-'} />
+                            <DetailItem label="RFP date" value={formatDate(selectedPoc.rfpDate)} />
                             <DetailItem label="SPOC Email" value={selectedPoc.spocEmail || '-'} />
                             <DetailItem label="SPOC Designation" value={selectedPoc.spocDesignation || '-'} />
                             <DetailItem
@@ -1698,7 +1751,6 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                                         : '-'
                                 }
                             />
-                            <DetailItem label="Approved By" value={selectedPoc.approvedBy || '-'} />
                             <DetailItem
                                 label="Total Efforts"
                                 value={

@@ -108,7 +108,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         salesPerson: false,
         region: false,
         isBillable: false,
-        pocType: false,
+        pocType: true,
         description: false,
         spocEmail: false,
         spocDesignation: false,
@@ -319,7 +319,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
 
                 // Handle special rendering cases
                 if (config.render) {
-                    
+
                     // For rendered values, get the text content
                     if (key === 'status') {
                         return poc.status || 'Draft';
@@ -923,7 +923,8 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Link>
             )
         },
-        entityName: { label: 'Company Name', truncate: 15 },
+        pocType: { label: 'Usecase Type', truncate: false },
+        entityName: { label: 'Client Name', truncate: 15 },
         partnerName: { label: 'Partner Name', truncate: 20 },
         pocName: { label: 'Usecase Name', truncate: 20 },
         assignedTo: { label: 'Assigned To', truncate: false },
@@ -1026,7 +1027,6 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         salesPerson: { label: 'Sales Person', truncate: false },
         region: { label: 'Region', truncate: false },
         isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
-        pocType: { label: 'Usecase Type', truncate: false },
         description: { label: 'Description', truncate: 25 },
         spocEmail: { label: 'SPOC Email', truncate: 20 },
         spocDesignation: { label: 'SPOC Designation', truncate: false },
@@ -1711,7 +1711,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Description" value={selectedPoc.description || '-'} />
                             <DetailItem label="Client Type" value={selectedPoc.entityType} />
                             <DetailItem label="Usecase Type" value={selectedPoc.pocType} />
-                            <DetailItem label="Company Name" value={selectedPoc.entityName} />
+                            <DetailItem label="Client Name" value={selectedPoc.entityName} />
                             <DetailItem
                                 label="Partner Name"
                                 value={selectedPoc.partnerName || '-'}

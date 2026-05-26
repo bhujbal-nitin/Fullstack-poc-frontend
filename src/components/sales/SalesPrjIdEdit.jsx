@@ -78,10 +78,15 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const [actualEndDate, setActualEndDate] = useState(poc?.actualEndDate ? poc.actualEndDate.split('T')[0] : '');
     const [estimatedEfforts, setEstimatedEfforts] = useState(poc?.estimatedEfforts || '');
     const [totalEfforts, setTotalEfforts] = useState(poc?.totalEfforts || '');
-
-    const [approvedBy, setApprovedBy] = useState(poc?.approvedBy || '');
     const [remark, setRemark] = useState(poc?.remark || '');
     const [region, setRegion] = useState(poc?.region || '');
+    const [industryType, setIndustryType] = useState(poc?.industryType || '');
+    const [meetingMode, setMeetingMode] = useState(poc?.meetingMode || '');
+    const [callType, setCallType] = useState(poc?.callType || '');
+    const [logoWin, setLogoWin] = useState(poc?.logoWin || '');
+    const [hsLink, setHsLink] = useState(poc?.hsLink || '');
+    const [rfpDate, setRfpDate] = useState(poc?.rfpDate ? poc.rfpDate.split('T')[0] : '');
+    const [clientNewExisting, setClientNewExisting] = useState(poc?.clientNewExisting || '');
 
 
 
@@ -103,7 +108,6 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const [users, setUsers] = useState([]);
     const [createdByOptions, setCreatedByOptions] = useState([]);
     const [tagOptions, setTagOptions] = useState([]);
-    const [approverOptions, setApproverOptions] = useState([]);
 
     // Error states
     const [errors, setErrors] = useState({});
@@ -327,11 +331,29 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             department_name: departmentName
                         }
                     });
-                    const assignToData = processApiData(assignToResponse.data);
-                    setUsers(assignToData.length > 0 ? assignToData : ['admin', 'manager', 'developer', 'tester', 'analyst']);
+                    let assignToData = processApiData(assignToResponse.data);
+                    if (assignToData.length === 0) {
+                        assignToData = ['admin', 'manager', 'developer', 'tester', 'analyst'];
+                    }
+                    if (emp_name && assignToData.length > 0) {
+                        const index = assignToData.findIndex(u => u.toLowerCase() === emp_name.toLowerCase());
+                        if (index > -1) {
+                            const [matched] = assignToData.splice(index, 1);
+                            assignToData = [matched, ...assignToData];
+                        }
+                    }
+                    setUsers(assignToData);
                 } catch (assignToError) {
                     console.error('Error fetching assigned to options:', assignToError);
-                    setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
+                    let fallbackUsers = ['admin', 'manager', 'developer', 'tester', 'analyst'];
+                    if (emp_name && fallbackUsers.length > 0) {
+                        const index = fallbackUsers.findIndex(u => u.toLowerCase() === emp_name.toLowerCase());
+                        if (index > -1) {
+                            const [matched] = fallbackUsers.splice(index, 1);
+                            fallbackUsers = [matched, ...fallbackUsers];
+                        }
+                    }
+                    setUsers(fallbackUsers);
                 }
 
                 // Fetch Created By options from API with emp_name parameter
@@ -357,34 +379,6 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     }
                 } else {
                     setCreatedByOptions(['admin', 'manager', 'user']);
-                }
-
-                // Fetch approvers from the new API endpoint
-                // Fetch approvers from the new API endpoint
-                try {
-                    const token = localStorage.getItem('authToken');
-
-                    if (!token || isTokenExpired(token)) {
-                        handleAutoLogout();
-                        return;
-                    }
-
-                    const approversResponse = await axios.get(`${import.meta.env.VITE_API}/poc/getAllApprovedBy`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-
-                    console.log('Raw Approvers API Response:', approversResponse.data);
-
-                    // Direct mapping - simplest approach
-                    const approversData = approversResponse.data.map(approver => approver.name);
-                    console.log('Mapped Approver Names:', approversData);
-
-                    setApproverOptions(approversData.length > 0 ? approversData : ['admin', 'manager', 'supervisor']);
-                } catch (approversError) {
-                    console.error('Error fetching approved by options:', approversError);
-                    setApproverOptions(['admin', 'manager', 'supervisor']);
                 }
 
                 // Load other dropdown data
@@ -443,13 +437,16 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     };
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
+        if (e?.preventDefault) {
+            e.preventDefault();
+        }
 
         // Validation
         const newErrors = {};
         if (!idPrefix) newErrors.idPrefix = 'ID Prefix is required';
         if (!pocName) newErrors.pocName = 'Usecase Name is required';
         if (!entityType) newErrors.entityType = 'Client Type is required';
+        if (!clientNewExisting) newErrors.clientNewExisting = 'Client New/Existing is required';
         if (!entityName) newErrors.entityName = 'Company Name is required';
         if (entityType === 'Partner' && !partnerName) newErrors.partnerName = 'Partner Name is required';
         if (!salesPerson) newErrors.salesPerson = 'Sales Person is required';
@@ -470,7 +467,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
             try {
                 // Prepare form data for database
-                const normalizeDate = (value) => value && value.trim() !== "" ? value : null;
+                const normalizeDate = (value) => value && typeof value === 'string' && value.trim() !== "" ? value : null;
 
                 // Convert numeric fields properly - handle empty strings
                 const normalizeNumber = (value) => {
@@ -486,11 +483,17 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     partnerName,
                     salesPerson,
                     region,
-
+                    industryType,
+                    meetingMode,
+                    callType,
+                    logoWin,
+                    hsLink,
+                    rfpDate: normalizeDate(rfpDate),
                     status,
                     startDate: normalizeDate(startDate),
                     endDate: normalizeDate(endDate),
                     pocType,
+                    clientNewExisting,
                     description,
                     spocEmail,
                     spocDesignation,
@@ -500,7 +503,6 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     actualStartDate: normalizeDate(actualStartDate),
                     actualEndDate: normalizeDate(actualEndDate),
                     estimatedEfforts: normalizeNumber(estimatedEfforts),
-                    approvedBy: approvedBy || null,
                     totalEfforts: normalizeNumber(totalEfforts),
 
                 };
@@ -521,7 +523,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
 
                 if (response.data.message && response.data.message.includes("successfully")) {
-                    // alert('Usecase Code updated successfully!');
+                    alert('Usecase Code updated successfully!');
                     if (onSuccess) {
                         onSuccess();
                     }
@@ -540,6 +542,21 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 }
             } finally {
                 setLoading(false);
+            }
+        } else {
+            // Validation failed - show alert and navigate to the first step with error
+            const errorFields = Object.keys(newErrors);
+            alert(`Please fill all required fields: ${errorFields.join(', ')}`);
+
+            // Map fields to steps to help the user
+            if (newErrors.idPrefix || newErrors.pocName || newErrors.pocType) {
+                setActiveStep(0);
+            } else if (newErrors.entityType || newErrors.clientNewExisting || newErrors.entityName || newErrors.partnerName || newErrors.salesPerson || newErrors.region) {
+                setActiveStep(1);
+            } else if (newErrors.assignedTo || newErrors.startDate || newErrors.endDate) {
+                setActiveStep(2);
+            } else if (newErrors.tags || newErrors.status) {
+                setActiveStep(3);
             }
         }
     };
@@ -663,7 +680,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
             case 0:
                 return (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
                             {/* Usecase ID - Display only */}
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
@@ -713,6 +730,14 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 icon={<AssignmentIcon />}
                             />
 
+                            <Dropdown
+                                label="Industry Type"
+                                options={['BFSI', 'IT', 'Logistics', 'Manufacturing', 'Real Estate', 'Retail and E-commerce', 'Shipping', 'Telecommunications', 'Healthcare', 'Education', 'Media & Entertainment', 'Govt Authorities', 'Airline', 'Other',]}
+                                value={industryType}
+                                onChange={setIndustryType}
+                                placeholder="Select Industry Type"
+                                icon={<BusinessIcon />}
+                            />
                         </Box>
 
                         <TextInput
@@ -742,10 +767,10 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
             case 1:
                 return (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2 }}>
                             <Dropdown
                                 label="Client Type"
-                                options={["Partner", "Client", "Internal"]}
+                                options={["Partner", "Client", "Internal", "Prospect"]}
                                 value={entityType}
                                 onChange={setEntityType}
                                 error={errors.entityType}
@@ -754,8 +779,19 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 icon={<BusinessIcon />}
                             />
 
+                            <Dropdown
+                                label="Client New/Existing"
+                                options={["New", "Existing"]}
+                                value={clientNewExisting}
+                                onChange={setClientNewExisting}
+                                error={errors.clientNewExisting}
+                                placeholder="Select New/Existing"
+                                required
+                                icon={<BusinessIcon />}
+                            />
+
                             <TextInput
-                                label="End Client Name"
+                                label="Client Name"
                                 value={entityName}
                                 onChange={setEntityName}
                                 error={errors.entityName}
@@ -819,6 +855,61 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 placeholder="Enter SPOC Designation"
                                 icon={<PersonIcon />}
                             />
+                        </Box>
+
+                        {/* Meeting Details Section */}
+                        <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
+                            Meeting details
+                        </Typography>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+                            <Dropdown
+                                label="Mode of Meeting"
+                                options={['Online', 'In person']}
+                                value={meetingMode}
+                                onChange={setMeetingMode}
+                                placeholder="Select Mode"
+                            />
+
+                            <Dropdown
+                                label="Call Type"
+                                options={['Fresh', 'Follow up']}
+                                value={callType}
+                                onChange={setCallType}
+                                placeholder="Select Call Type"
+                            />
+
+                            <Dropdown
+                                label="Logo Win"
+                                options={['Yes', 'No']}
+                                value={logoWin}
+                                onChange={setLogoWin}
+                                placeholder="Select Logo Win"
+                            />
+
+                            <TextInput
+                                label="HS Link"
+                                value={hsLink}
+                                onChange={setHsLink}
+                                placeholder="Enter HS Link"
+                            />
+
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    RFP date
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={rfpDate}
+                                    onChange={(e) => setRfpDate(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                            </Box>
                         </Box>
                     </Box>
                 );
@@ -995,20 +1086,6 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 icon={<WorkIcon />}
                             />
                         </Box>
-
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-
-
-                            <Dropdown
-                                label="Approved By"
-                                options={approverOptions}
-                                value={approvedBy}
-                                onChange={setApprovedBy}
-                                placeholder="Select Approver"
-                                loading={apiLoading}
-                                icon={<PersonIcon />}
-                            />
-                        </Box>
                     </Box>
                 );
 
@@ -1088,7 +1165,10 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 variant="contained"
                                 loading={loading}
                                 disabled={apiLoading}
-                                onClick={() => safeAction(handleSubmit)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    safeAction(() => handleSubmit(e));
+                                }}
                                 startIcon={<CheckCircleIcon />}
                                 sx={{
                                     backgroundColor: '#1976d2',
@@ -1144,7 +1224,10 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
             {/* Form content */}
             <Paper sx={{ p: 3, flex: 1, overflow: 'auto', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={(e) => {
+                    e.preventDefault();
+                    safeAction(() => handleSubmit(e));
+                }}>
                     {apiLoading ? (
                         <Box sx={{ textAlign: 'center', py: 4 }}>
                             <CircularProgress />
@@ -1190,7 +1273,10 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                         variant="contained"
                         loading={loading}
                         disabled={apiLoading}
-                        onClick={() => safeAction(handleSubmit)}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            safeAction(() => handleSubmit(e));
+                        }}
                         startIcon={<CheckCircleIcon />}
                         sx={{
                             backgroundColor: '#1976d2',
@@ -1247,7 +1333,6 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={user}
-                                        secondary={`${user.toLowerCase()}@company.com`}
                                     />
                                     <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
                                         {user.charAt(0).toUpperCase()}
