@@ -1721,6 +1721,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Client Name" value={selectedPoc.entityName} />
                             <DetailItem label="Sales Person" value={selectedPoc.salesPerson} />
                             <DetailItem label="Region" value={selectedPoc.region} />
+                            <DetailItem label="Country" value={selectedPoc.country || '-'} />
                             <DetailItem label="Industry Type" value={selectedPoc.industryType || '-'} />
                             <DetailItem label="Mode of Meeting" value={selectedPoc.meetingMode || '-'} />
                             <DetailItem label="Call Type" value={selectedPoc.callType || '-'} />

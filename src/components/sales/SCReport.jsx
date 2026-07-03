@@ -57,6 +57,7 @@ import {
     HourglassEmpty as HourglassEmptyIcon,
     Pause as PauseIcon,
     Clear as ClearIcon,
+    Download as DownloadIcon,
 } from "@mui/icons-material";
 
 ChartJS.register(
@@ -774,7 +775,7 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
             },
             title: {
                 display: true,
-                text: '🏭 GRAND TOTAL BY INDUSTRY',
+                text: '🏭 Work Requests by Industry',
                 font: { size: 18, weight: 'bold' },
                 padding: { top: 10, bottom: 20 },
                 color: '#333',
@@ -871,7 +872,7 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
             legend: { display: false },
             title: {
                 display: true,
-                text: '👤 GRAND TOTAL BY SME',
+                text: '👤 Work Requests Processed by Consultant',
                 font: { size: 18, weight: 'bold' },
                 padding: { top: 10, bottom: 20 },
                 color: '#333',
@@ -935,7 +936,7 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
             },
             title: {
                 display: true,
-                text: '👤 USECASES BY SALES PERSON (STATUS-WISE)',
+                text: '👤 Work Requests by Sales Person (STATUS-WISE)',
                 font: { size: 18, weight: 'bold' },
                 padding: { top: 10, bottom: 20 },
                 color: '#333',
@@ -1007,6 +1008,38 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
             }
         },
         animation: { duration: 1000, easing: 'easeOutQuart' }
+    };
+
+    const exportWhiteBackgroundPlugin = {
+        id: 'customCanvasBackgroundColor',
+        beforeDraw: (chart, args, options) => {
+            const { ctx, width, height } = chart;
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = options.color || '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw a border
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#cccccc';
+            ctx.strokeRect(1, 1, width - 2, height - 2);
+
+            ctx.restore();
+        }
+    };
+
+    const industryChartRef = useRef(null);
+    const smeChartRef = useRef(null);
+    const salesPersonChartRef = useRef(null);
+
+    const handleExportChart = (chartRef, fileName) => {
+        if (chartRef && chartRef.current) {
+            const base64Image = chartRef.current.toBase64Image();
+            const link = document.createElement('a');
+            link.href = base64Image;
+            link.download = `${fileName}-${new Date().toISOString().split('T')[0]}.png`;
+            link.click();
+        }
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -1913,7 +1946,7 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mt: 3, flexWrap: 'wrap', gap: 1 }}>
                                         <Box>
                                             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
-                                                👤 Usecases by Sales Person (Status-wise)
+                                                👤 Work Requests by Sales Person (Status-wise)
                                             </Typography>
                                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                                 Showing {salesPersonList.length} Sales Persons × 4 Statuses
@@ -2107,9 +2140,19 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
                                             width: '100%',
                                         }}
                                     >
-                                        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
-                                            🏭 Grand Total by Industry
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                                🏭 Work Requests by Industry
+                                            </Typography>
+                                            <Button
+                                                variant="outlined"
+                                                startIcon={<DownloadIcon />}
+                                                size="small"
+                                                onClick={() => handleExportChart(industryChartRef, 'industry_requests')}
+                                            >
+                                                Export
+                                            </Button>
+                                        </Box>
 
                                         {/* Summary chips */}
                                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
@@ -2132,8 +2175,10 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
                                         <Box sx={{ height: 'calc(100% - 90px)', position: 'relative' }}>
                                             {industryChartData && industryChartData.labels?.length > 0 ? (
                                                 <Bar
+                                                    ref={industryChartRef}
                                                     data={industryChartData}
                                                     options={industryChartOptions}
+                                                    plugins={[exportWhiteBackgroundPlugin]}
                                                 />
                                             ) : (
                                                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
@@ -2151,16 +2196,27 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
                                         background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
                                         border: '2px solid', borderColor: 'secondary.light', width: '100%',
                                     }}>
-                                        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#9c27b0' }}>
-                                            👤 Grand Total by SME
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+                                                👤 Work Requests Processed by Consultant
+                                            </Typography>
+                                            <Button
+                                                variant="outlined"
+                                                color="secondary"
+                                                startIcon={<DownloadIcon />}
+                                                size="small"
+                                                onClick={() => handleExportChart(smeChartRef, 'sme_requests')}
+                                            >
+                                                Export
+                                            </Button>
+                                        </Box>
                                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
                                             <Chip label={`👥 SMEs: ${smeList.length}`} color="secondary" variant="outlined" size="small" sx={{ fontWeight: 'bold' }} />
                                             <Chip label={`🔢 Grand Total: ${grandSmeTotal}`} color="success" variant="outlined" size="small" sx={{ fontWeight: 'bold' }} />
                                         </Box>
                                         <Box sx={{ height: 'calc(100% - 90px)', position: 'relative' }}>
                                             {smeChartData && smeChartData.labels?.length > 0 ? (
-                                                <Bar data={smeChartData} options={smeChartOptions} />
+                                                <Bar ref={smeChartRef} data={smeChartData} options={smeChartOptions} plugins={[exportWhiteBackgroundPlugin]} />
                                             ) : (
                                                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                                                     <Typography variant="h5" color="text.secondary">👤 No SME data available</Typography>
@@ -2175,9 +2231,20 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
                                         background: 'linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%)',
                                         border: '2px solid', borderColor: 'primary.light', width: '100%',
                                     }}>
-                                        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#1976d2' }}>
-                                            👤 Usecases by Sales Person (Status-wise)
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                                                👤 Work Requests by Sales Person (Status-wise)
+                                            </Typography>
+                                            <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                startIcon={<DownloadIcon />}
+                                                size="small"
+                                                onClick={() => handleExportChart(salesPersonChartRef, 'sales_person_requests')}
+                                            >
+                                                Export
+                                            </Button>
+                                        </Box>
                                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
                                             <Chip label={`👥 Sales Persons: ${salesPersonList.length}`} color="primary" variant="outlined" size="small" sx={{ fontWeight: 'bold' }} />
                                             <Chip label={`🔢 Grand Total: ${salesPersonMatrixData['Grand Total']?.Total || 0}`} color="success" variant="outlined" size="small" sx={{ fontWeight: 'bold' }} />
@@ -2185,7 +2252,9 @@ const SCReport = ({ onNavigate, onLogout, user }) => {
                                         <Box sx={{ height: 'calc(100% - 90px)', position: 'relative' }}>
                                             {salesPersonChartData && salesPersonChartData.labels?.length > 0 ? (
                                                 <Bar
+                                                    ref={salesPersonChartRef}
                                                     data={salesPersonChartData}
+                                                    plugins={[exportWhiteBackgroundPlugin]}
                                                     options={{
                                                         ...salesPersonChartOptions,
                                                         onHover: (event, elements) => {

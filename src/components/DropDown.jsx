@@ -9,11 +9,12 @@ export default function Dropdown({
   error,
   loading = false,
   fetchError = null,
+  required = true,
 }) {
   return (
     <div className="dropdown-container">
      <label className="dropdown-label" style={{ display: "inline-flex", alignItems: "center" }}>
-  {label} <span style={{ color: "red", marginLeft: "4px" }}>*</span>
+  {label} {required && <span style={{ color: "red", marginLeft: "4px" }}>*</span>}
 </label>
 
       <select

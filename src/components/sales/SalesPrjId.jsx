@@ -37,7 +37,9 @@ import {
   InputAdornment,
   Tooltip,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Autocomplete,
+  TextField
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -73,6 +75,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
   const [endDate, setEndDate] = useState('');
   const [remark, setRemark] = useState('');
   const [region, setRegion] = useState('');
+  const [country, setCountry] = useState('');
   const [industryType, setIndustryType] = useState('');
   const [meetingMode, setMeetingMode] = useState('');
   const [callType, setCallType] = useState('');
@@ -96,6 +99,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
   // Dropdown options
   const [salesPersons, setSalesPersons] = useState([]);
   const [regions, setRegions] = useState([]);
+  const [countryOptions, setCountryOptions] = useState([]);
   const [users, setUsers] = useState([]);
   const [createdByOptions, setCreatedByOptions] = useState([]);
   const [tagOptions, setTagOptions] = useState([]);
@@ -360,14 +364,24 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
         }
 
         // Load other dropdown data
-        setRegions(['ROW', 'ISSARC', 'America', 'Other']);
+        setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
         setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+
+        try {
+          const countryRes = await axios.get(`${import.meta.env.VITE_API}/poc/sc/master_dropdown/country`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          setCountryOptions(countryRes.data.map(item => item.value));
+        } catch (err) {
+          console.error("Error fetching country dropdown:", err);
+          setCountryOptions([]);
+        }
 
       } catch (error) {
         console.error('Error fetching dropdown data:', error);
         // Fallback to dummy data if API fails
         setSalesPersons([]);
-        setRegions(['ROW', 'ISSARC', 'America', 'Other']);
+        setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
         setUsers([]);
         setCreatedByOptions([]);
         setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
@@ -482,7 +496,8 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
         clientNewExisting,
         spocEmail,
         spocDesignation,
-        tags: tags.join(',')
+        tags: tags.join(','),
+        country
       };
 
       console.log('Submitting formData:', formData);
@@ -541,6 +556,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     setEndDate('');
     setRemark('');
     setRegion('');
+    setCountry('');
     setIndustryType('');
     setMeetingMode('');
     setCallType('');
@@ -704,7 +720,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   Industry Type
                 </Typography>
                 <Dropdown
-                  options={['BFSI', 'IT', 'Logistics', 'Manufacturing', 'Real Estate', 'Retail and E-commerce', 'Shipping', 'Telecommunications', 'Healthcare', 'Education', 'Media & Entertainment', 'Govt Authorities', 'Airline', 'Other',]}
+                  options={['BFSI', 'IT', 'Logistics', 'Manufacturing', 'Real Estate', 'Retail and E-commerce', 'Shipping', 'Telecommunications', 'FMCG', 'Healthcare', 'Education', 'Media & Entertainment', 'Govt Authorities', 'Airline', 'Other',]}
                   value={industryType}
                   onChange={setIndustryType}
                   placeholder="Select"
@@ -931,11 +947,11 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
               )}
             </Box>
 
-            {/* Row 2: Sales Person + Region + SPOC Email - Compact */}
+            {/* Row 2: Sales Person + Region + Country + SPOC Email - Compact */}
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr 1fr" },
                 gap: 1.5,
               }}
             >
@@ -967,6 +983,22 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   placeholder="-- Select --"
                   required
                   size="small"
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Country
+                </Typography>
+                <Autocomplete
+                  options={countryOptions}
+                  value={country || null}
+                  onChange={(event, newValue) => {
+                    setCountry(newValue);
+                  }}
+                  renderInput={(params) => <TextField {...params} placeholder="-- Select --" size="small" />}
+                  size="small"
+                  fullWidth
                 />
               </Box>
 

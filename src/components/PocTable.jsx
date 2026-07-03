@@ -1888,3 +1888,4 @@ const DetailItem = ({ label, value, render }) => (
 );
 
 export default PocTable;
+

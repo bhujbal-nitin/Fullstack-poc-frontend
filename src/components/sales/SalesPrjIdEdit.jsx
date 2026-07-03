@@ -37,7 +37,9 @@ import {
     InputAdornment,
     Tooltip,
     Alert,
-    CircularProgress
+    CircularProgress,
+    Autocomplete,
+    TextField
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -80,6 +82,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const [totalEfforts, setTotalEfforts] = useState(poc?.totalEfforts || '');
     const [remark, setRemark] = useState(poc?.remark || '');
     const [region, setRegion] = useState(poc?.region || '');
+    const [country, setCountry] = useState(poc?.country || '');
     const [industryType, setIndustryType] = useState(poc?.industryType || '');
     const [meetingMode, setMeetingMode] = useState(poc?.meetingMode || '');
     const [callType, setCallType] = useState(poc?.callType || '');
@@ -105,6 +108,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     // Dropdown options
     const [salesPersons, setSalesPersons] = useState([]);
     const [regions, setRegions] = useState([]);
+    const [countryOptions, setCountryOptions] = useState([]);
     const [users, setUsers] = useState([]);
     const [createdByOptions, setCreatedByOptions] = useState([]);
     const [tagOptions, setTagOptions] = useState([]);
@@ -382,14 +386,24 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 }
 
                 // Load other dropdown data
-                setRegions(['ROW', 'ISSARC', 'America', 'Other']);
+                setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
                 setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+
+                try {
+                    const countryRes = await axios.get(`${import.meta.env.VITE_API}/poc/sc/master_dropdown/country`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    setCountryOptions(countryRes.data.map(item => item.value));
+                } catch (err) {
+                    console.error("Error fetching country dropdown:", err);
+                    setCountryOptions([]);
+                }
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
                 // Fallback to dummy data if API fails
                 setSalesPersons(['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson']);
-                setRegions(['ROW', 'ISSARC', 'America', 'Other']);
+                setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
                 setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 setCreatedByOptions(['admin', 'manager', 'user']);
                 setApproverOptions(['admin', 'manager', 'supervisor']);
@@ -498,6 +512,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     spocEmail,
                     spocDesignation,
                     tags: tags?.length ? tags.join(',') : null,
+                    country,
                     assignedTo: assignedTo?.length ? assignedTo.join(',') : null,
                     remark: remark || null,
                     actualStartDate: normalizeDate(actualStartDate),
@@ -732,7 +747,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                             <Dropdown
                                 label="Industry Type"
-                                options={['BFSI', 'IT', 'Logistics', 'Manufacturing', 'Real Estate', 'Retail and E-commerce', 'Shipping', 'Telecommunications', 'Healthcare', 'Education', 'Media & Entertainment', 'Govt Authorities', 'Airline', 'Other',]}
+                                options={['BFSI', 'IT', 'Logistics', 'Manufacturing', 'Real Estate', 'Retail and E-commerce', 'Shipping', 'Telecommunications', 'Healthcare', 'FMCG', 'Education', 'Media & Entertainment', 'Govt Authorities', 'Airline', 'Other',]}
                                 value={industryType}
                                 onChange={setIndustryType}
                                 placeholder="Select Industry Type"
@@ -813,7 +828,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             )}
                         </Box>
 
-                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 2 }}>
                             <Dropdown
                                 label="Sales Person"
                                 options={salesPersons}
@@ -836,6 +851,22 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 required
                                 icon={<LocationIcon />}
                             />
+
+                            <Box>
+                                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                                    Country
+                                </Typography>
+                                <Autocomplete
+                                    options={countryOptions}
+                                    value={country || null}
+                                    onChange={(event, newValue) => {
+                                        setCountry(newValue);
+                                    }}
+                                    renderInput={(params) => <TextField {...params} placeholder="-- Select --" size="small" />}
+                                    size="small"
+                                    fullWidth
+                                />
+                            </Box>
 
                             <TextInput
                                 label="SPOC Email Address"

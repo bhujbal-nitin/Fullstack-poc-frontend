@@ -33,7 +33,9 @@ import {
     StepLabel,
     CircularProgress,
     TextField,
-    InputAdornment
+    InputAdornment,
+    Select,
+    MenuItem
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -82,6 +84,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const [pocType, setPocType] = useState(poc?.pocType || '');
     const [spocEmail, setSpocEmail] = useState(poc?.spocEmail || '');
     const [spocDesignation, setSpocDesignation] = useState(poc?.spocDesignation || '');
+    const [department, setDepartment] = useState(poc?.department ? poc.department.split(',') : []);
+    const [convertedDate, setConvertedDate] = useState(poc?.convertedDate ? poc.convertedDate.split('T')[0] : '');
     const [tags, setTags] = useState(poc?.tags ? poc.tags.split(',') : []);
     const [status, setStatus] = useState(poc?.status || 'Draft');
     const [loading, setLoading] = useState(false);
@@ -118,6 +122,8 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         'R&D',
         'SolutionConsultation',
         'EffortsEstimation',
+        'SME',
+        'Training',
         'Task',
         'Demo',
         'Internal',
@@ -126,6 +132,21 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         'Support',
         'Vco Create',
         'KnowledgeTransfer'
+    ];
+
+    const departmentOptions = [
+        'IT Service Desk',
+        'Customer Support',
+        'HR',
+        'Finance & Accounts Payable',
+        'Admin',
+        'Sales Operations',
+        'Marketing',
+        'WFM',
+        'Professional Services',
+        'Training',
+        'Product Engineering',
+        'Other'
     ];
 
     // Function to get emp_name from localStorage
@@ -289,7 +310,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -299,7 +320,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 // setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 // setCreatedByOptions(['admin', 'manager', 'user']);
                 // setApproverOptions(['admin', 'manager', 'supervisor']);
-                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
+                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -396,7 +417,9 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     description,
                     spocEmail,
                     spocDesignation,
+                    department: department?.length ? department.join(',') : null,
                     tags: tags?.length ? tags.join(',') : null,
+                    convertedDate: normalizeDate(convertedDate),
                     assignedTo: assignedTo?.length
                         ? assignedTo
                             .map(email => {
@@ -700,7 +723,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                             />
                         </Box>
 
-                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                             <TextInput
                                 label="SPOC Designation"
                                 value={spocDesignation}
@@ -708,6 +731,32 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 placeholder="Enter SPOC Designation"
                                 icon={<PersonIcon />}
                             />
+
+                            <FormControl fullWidth size="small">
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                                    <BusinessIcon sx={{ color: 'action.active', mr: 1, fontSize: 20 }} />
+                                    <FormLabel sx={{ fontSize: '0.875rem' }}>Department</FormLabel>
+                                </Box>
+                                <Select
+                                    multiple
+                                    displayEmpty
+                                    value={Array.isArray(department) ? department : []}
+                                    onChange={(e) => setDepartment(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+                                    renderValue={(selected) => {
+                                        if (selected.length === 0) {
+                                            return <span style={{ color: '#aaa' }}>Select Department(s)</span>;
+                                        }
+                                        return selected.join(', ');
+                                    }}
+                                >
+                                    {departmentOptions.map((option) => (
+                                        <MenuItem key={option} value={option}>
+                                            <Checkbox checked={department.indexOf(option) > -1} />
+                                            <ListItemText primary={option} />
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
                         </Box>
                     </Box>
                 );
@@ -883,6 +932,24 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                         </Box>
 
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                    Converted Date
+                                </Typography>
+                                <input
+                                    type="date"
+                                    value={convertedDate}
+                                    onChange={(e) => setConvertedDate(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        fontSize: '14px'
+                                    }}
+                                />
+                            </Box>
+
                             <TextInput
                                 label="Estimated Efforts"
                                 value={estimatedEfforts}
@@ -891,7 +958,9 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 type="number"
                                 icon={<WorkIcon />}
                             />
+                        </Box>
 
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                             <TextInput
                                 label="Total Efforts"
                                 value={totalEfforts}
@@ -900,9 +969,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 type="number"
                                 icon={<WorkIcon />}
                             />
-                        </Box>
 
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                             <TextInput
                                 label="Variance Days"
                                 value={varianceDays}
@@ -911,7 +978,9 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                 type="number"
                                 icon={<CalendarIcon />}
                             />
+                        </Box>
 
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                             <Dropdown
                                 label="Approved By"
                                 options={approverOptions}
@@ -941,6 +1010,9 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                     'R&D',
                                     'Solution Consultation',
                                     'Efforts Estimation',
+                                    'Copilot',
+                                    'SME',
+                                    'Training',
                                     'Task',
                                     'Demo',
                                     'Internal',
