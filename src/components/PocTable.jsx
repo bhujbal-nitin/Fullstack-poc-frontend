@@ -923,11 +923,11 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Link>
             )
         },
-        pocType: { label: 'Usecase Type', truncate: false },
-        entityName: { label: 'Client Name', truncate: 15 },
-        partnerName: { label: 'Partner Name', truncate: 20 },
-        pocName: { label: 'Usecase Name', truncate: 20 },
-        assignedTo: { label: 'Assigned To', truncate: false },
+        pocType: { label: 'Usecase Type', width: 130 },
+        entityName: { label: 'Client Name', width: 160 },
+        partnerName: { label: 'Partner Name', width: 160 },
+        pocName: { label: 'Usecase Name', width: 180 },
+        assignedTo: { label: 'Assigned To', width: 220 },
         startDate: { label: 'Start Date', truncate: false, render: (poc) => formatDate(poc.startDate) },
         endDate: { label: 'End Date', truncate: false, render: (poc) => formatDate(poc.endDate) },
         actualStartDate: { label: 'Actual Start Date', truncate: false, render: (poc) => formatDate(poc.actualStartDate) },
@@ -1023,15 +1023,15 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 )
             )
         },
-        entityType: { label: 'Client Type', truncate: false },
-        salesPerson: { label: 'Sales Person', truncate: false },
-        region: { label: 'Region', truncate: false },
+        entityType: { label: 'Client Type', width: 120 },
+        salesPerson: { label: 'Sales Person', width: 140 },
+        region: { label: 'Region', width: 120 },
         isBillable: { label: 'Billable', truncate: false, render: (poc) => getBillableChip(poc.isBillable) },
-        description: { label: 'Description', truncate: 25 },
-        spocEmail: { label: 'SPOC Email', truncate: 20 },
-        spocDesignation: { label: 'SPOC Designation', truncate: false },
-        tags: { label: 'Tags', truncate: 15 },
-        createdBy: { label: 'Created By', truncate: false },
+        description: { label: 'Description', width: 220 },
+        spocEmail: { label: 'SPOC Email', width: 180 },
+        spocDesignation: { label: 'SPOC Designation', width: 160 },
+        tags: { label: 'Tags', width: 140 },
+        createdBy: { label: 'Created By', width: 140 },
         estimatedEfforts: {
             label: 'Estimated Efforts',
             truncate: false,
@@ -1044,7 +1044,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                 </Typography>
             )
         },
-        approvedBy: { label: 'Approved By', truncate: false },
+        approvedBy: { label: 'Approved By', width: 140 },
         totalEfforts: {
             label: 'Total Efforts',
             truncate: false,
@@ -1270,7 +1270,12 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                                             whiteSpace: 'nowrap',
                                                             backgroundColor: '#1976d2',
                                                             color: 'white',
-                                                            fontWeight: 'bold'
+                                                            fontWeight: 'bold',
+                                                            ...(config.width && {
+                                                                width: config.width,
+                                                                minWidth: config.width,
+                                                                maxWidth: config.width
+                                                            })
                                                         }}>
                                                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                                                 <span>{config.label}</span>
@@ -1393,9 +1398,32 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
 
                                                         {Object.entries(columnConfig).map(([key, config]) =>
                                                             visibleColumns[key] && (
-                                                                <TableCell key={key} sx={{ whiteSpace: 'nowrap' }}>
+                                                                <TableCell key={key} sx={{
+                                                                    whiteSpace: 'nowrap',
+                                                                    ...(config.width && {
+                                                                        width: config.width,
+                                                                        minWidth: config.width,
+                                                                        maxWidth: config.width
+                                                                    })
+                                                                }}>
                                                                     {config.render ? (
                                                                         config.render(poc)
+                                                                    ) : config.width ? (
+                                                                        <Tooltip title={poc[key] || '-'}>
+                                                                            <Box
+                                                                                component="span"
+                                                                                sx={{
+                                                                                    display: 'inline-block',
+                                                                                    width: '100%',
+                                                                                    overflow: 'hidden',
+                                                                                    textOverflow: 'ellipsis',
+                                                                                    whiteSpace: 'nowrap',
+                                                                                    verticalAlign: 'middle'
+                                                                                }}
+                                                                            >
+                                                                                {poc[key] || '-'}
+                                                                            </Box>
+                                                                        </Tooltip>
                                                                     ) : (
                                                                         <Tooltip title={poc[key] || '-'}>
                                                                             <span>

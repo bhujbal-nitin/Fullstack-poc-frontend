@@ -131,6 +131,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         'Workshop',
         'Support',
         'Vco Create',
+        'SolFlo',
         'KnowledgeTransfer'
     ];
 
@@ -310,7 +311,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI',  'ITPA', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -320,7 +321,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 // setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 // setCreatedByOptions(['admin', 'manager', 'user']);
                 // setApproverOptions(['admin', 'manager', 'supervisor']);
-                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'Other']);
+                // setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'HITL', 'UI', 'ITPA', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -358,7 +359,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
 
     const handleSelectAllUsers = () => {
-        setSelectedUsers(users);
+        setSelectedUsers(users.map(user => user.email || user));
     };
 
     const handleDeselectAllUsers = () => {
@@ -1020,6 +1021,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                     'Workshop',
                                     'Support',
                                     'Vco Create',
+                                    'SolFlo',
                                     'Knowledge Transfer'
                                 ]}
                                 value={pocType}

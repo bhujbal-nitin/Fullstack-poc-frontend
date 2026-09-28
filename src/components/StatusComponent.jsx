@@ -534,6 +534,12 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
             return;
         }
 
+        if (editLeaveForm.halfDay && !editLeaveForm.endDate.isSame(editLeaveForm.startDate, 'day')) {
+            setError('For Half Day leave, Start Date and End Date must be the same day');
+            setEditLeaveLoading(false);
+            return;
+        }
+
         try {
             const token = localStorage.getItem('authToken');
 
@@ -695,6 +701,9 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
     // Function to get leaves for a specific date
     const getLeavesForDate = (date) => {
+        // Weekends are never working/leave days, even when a leave range spans across one
+        if (date.day() === 0 || date.day() === 6) return [];
+
         const dateStr = date.format('YYYY-MM-DD');
         return leaveData.filter(leave => {
             const startDate = dayjs(leave.start_date);
@@ -752,10 +761,19 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
 
     const calculateLeaveDays = () => {
         if (!leaveForm.startDate || !leaveForm.endDate) return 0;
+        if (leaveForm.halfDay) return 0.5;
+
         const start = dayjs(leaveForm.startDate);
         const end = dayjs(leaveForm.endDate);
-        if (leaveForm.halfDay) return 0.5;
-        return Math.abs(end.diff(start, 'day')) + 1;
+        const totalCalendarDays = Math.abs(end.diff(start, 'day')) + 1;
+
+        // Weekends are never leave days, even when the range spans across one
+        let businessDays = 0;
+        for (let i = 0; i < totalCalendarDays; i++) {
+            const dayOfWeek = start.add(i, 'day').day();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) businessDays++;
+        }
+        return businessDays;
     };
 
     const handleSubmitLeave = async (e) => {
@@ -774,6 +792,12 @@ const StatusComponent = ({ user, onNavigate, onLogout }) => {
         // Ensure end date is not before start date
         if (leaveForm.endDate.isBefore(leaveForm.startDate, 'day')) {
             setError('End date cannot be before start date');
+            setLeaveLoading(false);
+            return;
+        }
+
+        if (leaveForm.halfDay && !leaveForm.endDate.isSame(leaveForm.startDate, 'day')) {
+            setError('For Half Day leave, Start Date and End Date must be the same day');
             setLeaveLoading(false);
             return;
         }

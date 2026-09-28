@@ -126,6 +126,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         'Workshop',
         'Support',
         'Vco Create',
+        'SolFlo',
         'KnowledgeTransfer'
     ];
 
@@ -262,7 +263,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'UI', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'UI', 'ITPA', 'Other']);
 
             } catch (error) {
                 console.error('Error fetching dropdown data:', error);
@@ -271,7 +272,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                 setRegions(['ROW', 'ISSARC', 'America', 'Other']);
                 setUsers([]);
                 setCreatedByOptions([]);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Copilot', 'Migration', 'Chatbot', 'DocEdge', 'Mainframe', 'Human-in-the-Loop', 'UI', 'ITPA', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -323,7 +324,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     };
 
     const handleSelectAllUsers = () => {
-        setSelectedUsers(users);
+        setSelectedUsers(users.map(user => user.email || user));
     };
 
     const handleDeselectAllUsers = () => {
@@ -920,6 +921,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                                     'Workshop',
                                     'Support',
                                     'Vco Create',
+                                    'SolFlo',
                                     'Knowledge Transfer'
                                 ]}
                                 value={pocType}
