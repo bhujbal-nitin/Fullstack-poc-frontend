@@ -113,6 +113,9 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
     const [isCustomDate, setIsCustomDate] = useState(false);
 
 
+    const lastActivity = React.useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
     const isTokenExpired = (token) => {
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
@@ -149,6 +152,31 @@ const SalesStatusComponent = ({ user, onNavigate, onLogout }) => {
         fetchTodayStatus();
         fetchUserPermissions();
     }, []);
+
+    const updateActivity = React.useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    // Inactivity tracking - logs the user out after 30 minutes with no mouse/keyboard activity
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [updateActivity]);
 
 
     // ✅ Replace existing handleCalendarOpen with this:

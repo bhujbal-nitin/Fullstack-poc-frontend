@@ -217,6 +217,8 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
     const [columnMenuAnchor, setColumnMenuAnchor] = React.useState(null);
 
     const logoutInProgress = React.useRef(false);
+    const lastActivity = React.useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
     const handleLogout = React.useCallback(async () => {
         try {
@@ -259,6 +261,31 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
         }
 
     }, [handleAutoLogout]);
+
+    const updateActivity = React.useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    // Inactivity tracking - logs the user out after 30 minutes with no mouse/keyboard activity
+    React.useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
 
     const safeNavigate = React.useCallback((route) => {
         const token = localStorage.getItem('authToken');
@@ -362,6 +389,7 @@ const SalesTable = ({ onNavigate, onLogout, user }) => {
     React.useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearchTerm(searchTerm);
+            setPage(0);
         }, 300);
 
         return () => clearTimeout(timer);

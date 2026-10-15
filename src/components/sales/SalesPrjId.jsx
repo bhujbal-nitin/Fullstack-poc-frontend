@@ -39,7 +39,9 @@ import {
   Alert,
   CircularProgress,
   Autocomplete,
-  TextField
+  TextField,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -50,7 +52,6 @@ import {
   LocationOn as LocationIcon,
   CalendarToday as CalendarIcon,
   Description as DescriptionIcon,
-  Label as LabelIcon,
   AttachMoney as MoneyIcon,
   Work as WorkIcon,
   Assignment as AssignmentIcon,
@@ -73,6 +74,8 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
   const [createdBy, setCreatedBy] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [actualStartDate, setActualStartDate] = useState('');
+  const [actualEndDate, setActualEndDate] = useState('');
   const [remark, setRemark] = useState('');
   const [region, setRegion] = useState('');
   const [country, setCountry] = useState('');
@@ -88,6 +91,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
   const [spocEmail, setSpocEmail] = useState('');
   const [spocDesignation, setSpocDesignation] = useState('');
   const [tags, setTags] = useState([]);
+  const [status, setStatus] = useState('Draft');
   const [loading, setLoading] = useState(false);
   const [apiLoading, setApiLoading] = useState(true);
   const [idLoading, setIdLoading] = useState(false);
@@ -111,6 +115,8 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
   const [activeStep, setActiveStep] = useState(0);
 
   const logoutInProgress = React.useRef(false);
+  const lastActivity = React.useRef(Date.now());
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
 
   const isTokenExpired = (token) => {
@@ -157,6 +163,31 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
       handleAutoLogout();
     }
   }, [handleAutoLogout]);
+
+  const updateActivity = React.useCallback(() => {
+    lastActivity.current = Date.now();
+  }, []);
+
+  // Inactivity tracking - logs the user out after 30 minutes with no mouse/keyboard activity
+  React.useEffect(() => {
+    const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity);
+    });
+
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+        handleAutoLogout();
+      }
+    }, 60000);
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity);
+      });
+      clearInterval(interval);
+    };
+  }, [handleAutoLogout, updateActivity]);
 
 
   const safeAction = React.useCallback((action) => {
@@ -365,7 +396,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
 
         // Load other dropdown data
         setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
-        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'ITSM', 'Other']);
 
         try {
           const countryRes = await axios.get(`${import.meta.env.VITE_API}/poc/sc/master_dropdown/country`, {
@@ -384,7 +415,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
         setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
         setUsers([]);
         setCreatedByOptions([]);
-        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+        setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'ITSM', 'Other']);
       } finally {
         setApiLoading(false);
       }
@@ -465,6 +496,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     if (!startDate) newErrors.startDate = 'Start Date is required';
     if (!endDate) newErrors.endDate = 'End Date is required';
     if (!region) newErrors.region = 'Region is required';
+    if (!status) newErrors.status = 'Status is required';
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return; // stop if errors
@@ -484,6 +516,8 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
         createdBy: createdBy || (createdByOptions.length > 0 ? createdByOptions[0] : ''),
         startDate,
         endDate,
+        actualStartDate,
+        actualEndDate,
         remark,
         region,
         industryType,
@@ -497,7 +531,8 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
         spocEmail,
         spocDesignation,
         tags: tags.join(','),
-        country
+        country,
+        status
       };
 
       console.log('Submitting formData:', formData);
@@ -554,6 +589,8 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     setCreatedBy('');
     setStartDate('');
     setEndDate('');
+    setActualStartDate('');
+    setActualEndDate('');
     setRemark('');
     setRegion('');
     setCountry('');
@@ -568,16 +605,16 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
     setSpocEmail('');
     setSpocDesignation('');
     setTags([]);
+    setStatus('Draft');
     setErrors({});
     setActiveStep(0);
   };
 
-  const handleTagSelect = (tag) => {
-    if (!tags.includes(tag)) {
-      setTags([...tags, tag]);
-      if (errors.tags) {
-        setErrors({ ...errors, tags: null });
-      }
+  const handleTagsChange = (event) => {
+    const value = event.target.value;
+    setTags(typeof value === 'string' ? value.split(',') : value);
+    if (errors.tags) {
+      setErrors({ ...errors, tags: null });
     }
   };
 
@@ -644,6 +681,10 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
           newErrors.tags = 'At least one tag is required';
           stepValid = false;
         }
+        if (!status) {
+          newErrors.status = 'Status is required';
+          stepValid = false;
+        }
         break;
       default:
         break;
@@ -680,13 +721,14 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 2fr" },
                 gap: 2,
+                alignItems: "start",
               }}
             >
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Task Type *
+                  Task Type <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Dropdown
                   options={idPrefixOptions}
@@ -697,12 +739,13 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   required
                   fullWidth
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Usecase Name *
+                  Usecase Name <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <TextInput
                   value={pocName}
@@ -712,6 +755,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   required
                   fullWidth
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -724,8 +768,10 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   value={industryType}
                   onChange={setIndustryType}
                   placeholder="Select"
+                  required={false}
                   fullWidth
                   size="small"
+                  showLabel={false}
                 />
               </Box>
             </Box>
@@ -742,7 +788,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
               {/* Start Date */}
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Start Date *
+                  Start Date <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <input
                   type="date"
@@ -766,7 +812,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
               {/* End Date */}
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  End Date *
+                  End Date <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <input
                   type="date"
@@ -796,7 +842,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                   <Typography variant="caption" fontWeight="bold" color="text.secondary">
-                    Description *
+                    Description <span style={{ color: 'red' }}>*</span>
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {description.length}/500
@@ -819,6 +865,42 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                     {errors.description}
                   </Typography>
                 )}
+              </Box>
+            </Box>
+
+            {/* Row 3: Actual Start/End Date (optional, filled in once work actually begins/ends) */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 2fr" },
+                gap: 2,
+                alignItems: "start",
+              }}
+            >
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Actual Start Date
+                </Typography>
+                <input
+                  type="date"
+                  value={actualStartDate}
+                  onChange={(e) => setActualStartDate(e.target.value)}
+                  className="compact-date-input"
+                  style={{ borderColor: '#ddd' }}
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Actual End Date
+                </Typography>
+                <input
+                  type="date"
+                  value={actualEndDate}
+                  onChange={(e) => setActualEndDate(e.target.value)}
+                  className="compact-date-input"
+                  style={{ borderColor: '#ddd' }}
+                />
               </Box>
             </Box>
 
@@ -888,7 +970,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             >
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Client Type *
+                  Client Type <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Dropdown
                   options={["Partner", "Client", "Internal", "Prospect"]}
@@ -898,12 +980,13 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   placeholder="-- Select --"
                   required
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Client New/Existing *
+                  Client New/Existing <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Dropdown
                   options={["New", "Existing"]}
@@ -913,12 +996,13 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   placeholder="-- Select --"
                   required
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Client Name *
+                  Client Name <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <TextInput
                   value={entityName}
@@ -927,13 +1011,14 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   placeholder="Enter client name"
                   required
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
               {entityType === "Partner" && (
                 <Box>
                   <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                    Partner Name *
+                    Partner Name <span style={{ color: 'red' }}>*</span>
                   </Typography>
                   <TextInput
                     value={partnerName}
@@ -942,6 +1027,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                     placeholder="Enter partner name"
                     required
                     size="small"
+                    showLabel={false}
                   />
                 </Box>
               )}
@@ -957,7 +1043,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             >
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Sales Person *
+                  Sales Person <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Dropdown
                   options={salesPersons}
@@ -968,12 +1054,13 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   required
                   loading={apiLoading}
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
               <Box>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Region *
+                  Region <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Dropdown
                   options={regions}
@@ -983,6 +1070,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   placeholder="-- Select --"
                   required
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -1012,6 +1100,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   placeholder="Enter email"
                   type="email"
                   size="small"
+                  showLabel={false}
                 />
               </Box>
             </Box>
@@ -1033,6 +1122,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   onChange={setSpocDesignation}
                   placeholder="Enter designation"
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -1060,7 +1150,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                 <Typography variant="caption" fontWeight="bold" color="text.secondary">
-                  Assigned To *
+                  Assigned To <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 {assignedTo.length > 0 && (
                   <Typography variant="caption" color="primary" sx={{ cursor: 'pointer' }} onClick={() => safeAction(handleOpenUserDialog)}>
@@ -1134,7 +1224,9 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   value={meetingMode}
                   onChange={setMeetingMode}
                   placeholder="Select"
+                  required={false}
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -1147,7 +1239,9 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   value={callType}
                   onChange={setCallType}
                   placeholder="Select"
+                  required={false}
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -1160,7 +1254,9 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   value={logoWin}
                   onChange={setLogoWin}
                   placeholder="Select"
+                  required={false}
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -1173,6 +1269,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   onChange={setHsLink}
                   placeholder="Enter HS Link"
                   size="small"
+                  showLabel={false}
                 />
               </Box>
 
@@ -1200,7 +1297,7 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               <Box>
                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Tags *
+                  Tags <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Box sx={{
                   border: errors.tags ? '2px solid #d32f2f' : '1px solid #ccc',
@@ -1208,14 +1305,23 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                   p: 1,
                   minHeight: '56px'
                 }}>
-                  <Dropdown
-                    options={tagOptions}
-                    value=""
-                    onChange={handleTagSelect}
-                    placeholder="Select Tags"
-                    showLabel={false}
-                    icon={<LabelIcon />}
-                  />
+                  <Select
+                    multiple
+                    displayEmpty
+                    fullWidth
+                    size="small"
+                    value={tags}
+                    onChange={handleTagsChange}
+                    renderValue={() => 'Select Tags'}
+                    MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}
+                  >
+                    {tagOptions.map((option) => (
+                      <MenuItem key={option} value={option}>
+                        <Checkbox checked={tags.indexOf(option) > -1} />
+                        <ListItemText primary={option} />
+                      </MenuItem>
+                    ))}
+                  </Select>
                   {tags.length > 0 && (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
                       {tags.map(tag => (
@@ -1236,6 +1342,21 @@ const SalesPrjId = ({ onClose, onSuccess, onBack }) => {
                     {errors.tags}
                   </Typography>
                 )}
+              </Box>
+
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                  Status <span style={{ color: 'red' }}>*</span>
+                </Typography>
+                <Dropdown
+                  options={['Draft', 'Pending', 'In Progress', 'Completed', 'Cancelled', 'Awaiting', 'Hold', 'Closed', 'Converted']}
+                  value={status}
+                  onChange={setStatus}
+                  error={errors.status}
+                  placeholder="Select Status"
+                  required
+                  showLabel={false}
+                />
               </Box>
             </Box>
 

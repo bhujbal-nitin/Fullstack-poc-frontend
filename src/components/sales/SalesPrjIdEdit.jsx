@@ -39,7 +39,9 @@ import {
     Alert,
     CircularProgress,
     Autocomplete,
-    TextField
+    TextField,
+    Select,
+    MenuItem
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -50,7 +52,6 @@ import {
     LocationOn as LocationIcon,
     CalendarToday as CalendarIcon,
     Description as DescriptionIcon,
-    Label as LabelIcon,
     AttachMoney as MoneyIcon,
     Work as WorkIcon,
     Assignment as AssignmentIcon,
@@ -120,6 +121,8 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     const [activeStep, setActiveStep] = useState(0);
 
     const logoutInProgress = React.useRef(false);
+    const lastActivity = React.useRef(Date.now());
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
     const isTokenExpired = (token) => {
         try {
@@ -175,6 +178,31 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
             handleAutoLogout();
         }
     }, [handleAutoLogout]);
+
+    const updateActivity = React.useCallback(() => {
+        lastActivity.current = Date.now();
+    }, []);
+
+    // Inactivity tracking - logs the user out after 30 minutes with no mouse/keyboard activity
+    useEffect(() => {
+        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
+        events.forEach(event => {
+            window.addEventListener(event, updateActivity);
+        });
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity.current > INACTIVITY_TIMEOUT) {
+                handleAutoLogout();
+            }
+        }, 60000);
+
+        return () => {
+            events.forEach(event => {
+                window.removeEventListener(event, updateActivity);
+            });
+            clearInterval(interval);
+        };
+    }, [handleAutoLogout, updateActivity]);
 
 
     // ID prefix options
@@ -387,7 +415,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                 // Load other dropdown data
                 setRegions(['ROW', 'ISSARC', 'America', 'Asia', 'MEA', 'Africa', 'East Asia', 'ANZ', 'Europe', 'Other']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'ITSM', 'Other']);
 
                 try {
                     const countryRes = await axios.get(`${import.meta.env.VITE_API}/poc/sc/master_dropdown/country`, {
@@ -407,7 +435,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 setUsers(['admin', 'manager', 'developer', 'tester', 'analyst']);
                 setCreatedByOptions(['admin', 'manager', 'user']);
                 setApproverOptions(['admin', 'manager', 'supervisor']);
-                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'Other']);
+                setTagOptions(['GenAI', 'Agentic AI', 'SAP', 'RPA', 'Chatbot', 'DocEdge', 'Mainframe', 'ITSM', 'Other']);
             } finally {
                 setApiLoading(false);
             }
@@ -587,12 +615,11 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
         }
     }, [createdBy, poc?.createdBy]);
 
-    const handleTagSelect = (tag) => {
-        if (!tags.includes(tag)) {
-            setTags([...tags, tag]);
-            if (errors.tags) {
-                setErrors({ ...errors, tags: null });
-            }
+    const handleTagsChange = (event) => {
+        const value = event.target.value;
+        setTags(typeof value === 'string' ? value.split(',') : value);
+        if (errors.tags) {
+            setErrors({ ...errors, tags: null });
         }
     };
 
@@ -950,7 +977,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <Box>
                             <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                Assigned To *
+                                Assigned To <span style={{ color: 'red' }}>*</span>
                             </Typography>
                             <Button
                                 variant="outlined"
@@ -1013,7 +1040,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                    Start Date *
+                                    Start Date <span style={{ color: 'red' }}>*</span>
                                 </Typography>
                                 <input
                                     type="date"
@@ -1037,7 +1064,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                    End Date *
+                                    End Date <span style={{ color: 'red' }}>*</span>
                                 </Typography>
                                 <input
                                     type="date"
@@ -1127,7 +1154,7 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
 
                             <Box>
                                 <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                    Tags *
+                                    Tags <span style={{ color: 'red' }}>*</span>
                                 </Typography>
                                 <Box sx={{
                                     border: errors.tags ? '2px solid #d32f2f' : '1px solid #ccc',
@@ -1135,14 +1162,23 @@ const SalesPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                                     p: 1,
                                     minHeight: '56px'
                                 }}>
-                                    <Dropdown
-                                        options={tagOptions}
-                                        value=""
-                                        onChange={handleTagSelect}
-                                        placeholder="Select Tags"
-                                        showLabel={false}
-                                        icon={<LabelIcon />}
-                                    />
+                                    <Select
+                                        multiple
+                                        displayEmpty
+                                        fullWidth
+                                        size="small"
+                                        value={tags}
+                                        onChange={handleTagsChange}
+                                        renderValue={() => 'Select Tags'}
+                                        MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}
+                                    >
+                                        {tagOptions.map((option) => (
+                                            <MenuItem key={option} value={option}>
+                                                <Checkbox checked={tags.indexOf(option) > -1} />
+                                                <ListItemText primary={option} />
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
                                     {tags.length > 0 && (
                                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
                                             {tags.map(tag => (

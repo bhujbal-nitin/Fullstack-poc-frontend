@@ -629,6 +629,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             !searchTerm ||
             poc.pocId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.pocName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.pocType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.entityName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.partnerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.salesPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1172,7 +1173,10 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                 variant="outlined"
                                 size="small"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value);
+                                    setPage(0);
+                                }}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
