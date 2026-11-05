@@ -152,6 +152,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
     "SolFlo",
     "KnowledgeTransfer",
     "Utility",
+    "Product",
   ];
 
   const departmentOptions = [
@@ -1188,6 +1189,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                   "SolFlo",
                   "Knowledge Transfer",
                   "Utility",
+                  "Product",
                 ]}
                 value={pocType}
                 onChange={setPocType}

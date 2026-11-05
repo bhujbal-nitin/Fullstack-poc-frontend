@@ -129,6 +129,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     "SolFlo",
     "KnowledgeTransfer",
     "Utility",
+    "Product",
   ];
 
   const departmentOptions = [
@@ -476,7 +477,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
         } else {
           alert(
             "Failed to create Usecase Code: " +
-              (response.data.message || "Unknown error"),
+            (response.data.message || "Unknown error"),
           );
         }
       } catch (error) {
@@ -1030,6 +1031,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                   "SolFlo",
                   "Knowledge Transfer",
                   "Utility",
+                  "Product",
                 ]}
                 value={pocType}
                 onChange={setPocType}
