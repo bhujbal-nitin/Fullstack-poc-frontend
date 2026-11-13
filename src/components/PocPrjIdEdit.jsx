@@ -50,6 +50,7 @@ import {
   AttachMoney as MoneyIcon,
   Work as WorkIcon,
   Assignment as AssignmentIcon,
+  PriorityHigh as PriorityIcon,
   CheckCircle as CheckCircleIcon,
   Add as AddIcon,
   Remove as RemoveIcon,
@@ -94,6 +95,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
   const [isBillable, setIsBillable] = useState(poc?.isBillable || "No");
 
   const [pocType, setPocType] = useState(poc?.pocType || "");
+  const [priority, setPriority] = useState(poc?.priority || "");
   const [spocEmail, setSpocEmail] = useState(poc?.spocEmail || "");
   const [spocDesignation, setSpocDesignation] = useState(
     poc?.spocDesignation || "",
@@ -506,6 +508,7 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
           startDate: normalizeDate(startDate),
           endDate: normalizeDate(endDate),
           pocType,
+          priority: priority || null,
           description,
           spocEmail,
           spocDesignation,
@@ -1283,6 +1286,21 @@ const PocPrjIdEdit = ({ poc, onClose, onSuccess, onBack }) => {
                 placeholder="Select Status"
                 required
                 icon={<CheckCircleIcon />}
+              />
+            </Box>
+
+            <Box
+              sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+            >
+              <Dropdown
+                label="Priority"
+                options={["High", "Medium", "Low"]}
+                value={priority}
+                onChange={setPriority}
+                error={errors.priority}
+                placeholder="Select Priority"
+                required={false}
+                icon={<PriorityIcon />}
               />
             </Box>
 

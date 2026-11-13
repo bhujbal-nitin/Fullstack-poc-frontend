@@ -55,6 +55,7 @@ import {
   AttachMoney as MoneyIcon,
   Work as WorkIcon,
   Assignment as AssignmentIcon,
+  PriorityHigh as PriorityIcon,
   CheckCircle as CheckCircleIcon,
   Add as AddIcon,
   Remove as RemoveIcon,
@@ -79,6 +80,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
   const [region, setRegion] = useState("");
   const [isBillable, setIsBillable] = useState("");
   const [pocType, setPocType] = useState("");
+  const [priority, setPriority] = useState("");
   const [spocEmail, setSpocEmail] = useState("");
   const [spocDesignation, setSpocDesignation] = useState("");
   const [department, setDepartment] = useState([]);
@@ -440,6 +442,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
           region,
           isBillable: isBillable === "Yes",
           pocType,
+          priority: priority || null,
           spocEmail,
           spocDesignation,
           department: department?.length ? department.join(",") : null,
@@ -509,6 +512,7 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
     setRegion("");
     setIsBillable("");
     setPocType("");
+    setPriority("");
     setSpocEmail("");
     setSpocDesignation("");
     setDepartment([]);
@@ -1091,6 +1095,21 @@ const PocPrjId = ({ onClose, onSuccess, onBack }) => {
                   </Typography>
                 )}
               </Box>
+            </Box>
+
+            <Box
+              sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+            >
+              <Dropdown
+                label="Priority"
+                options={["High", "Medium", "Low"]}
+                value={priority}
+                onChange={setPriority}
+                error={errors.priority}
+                placeholder="Select Priority"
+                required={false}
+                icon={<PriorityIcon />}
+              />
             </Box>
 
             <TextInput

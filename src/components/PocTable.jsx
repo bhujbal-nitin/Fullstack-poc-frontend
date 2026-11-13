@@ -109,6 +109,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         region: false,
         isBillable: false,
         pocType: true,
+        priority: true,
         description: false,
         spocEmail: false,
         spocDesignation: false,
@@ -134,6 +135,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         startDate: '',
         endDate: '',
         pocType: '',
+        priority: '',
         description: '',
         spocEmail: '',
         spocDesignation: '',
@@ -630,6 +632,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             poc.pocId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.pocName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.pocType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            poc.priority?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.entityName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.partnerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             poc.salesPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -787,6 +790,15 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
         }
     };
 
+    const getPriorityColor = (priority) => {
+        switch (priority?.toLowerCase()) {
+            case 'high': return 'error';
+            case 'medium': return 'warning';
+            case 'low': return 'success';
+            default: return 'default';
+        }
+    };
+
     const getBillableChip = (isBillable) => {
         const value = (isBillable ?? '').toString().trim().toLowerCase();
 
@@ -925,6 +937,19 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
             )
         },
         pocType: { label: 'Usecase Type', width: 130 },
+        priority: {
+            label: 'Priority',
+            truncate: false,
+            render: (poc) => (
+                poc.priority ? (
+                    <Chip
+                        label={poc.priority}
+                        size="small"
+                        color={getPriorityColor(poc.priority)}
+                    />
+                ) : '-'
+            )
+        },
         entityName: { label: 'Client Name', width: 160 },
         partnerName: { label: 'Partner Name', width: 160 },
         pocName: { label: 'Usecase Name', width: 180 },
@@ -1622,6 +1647,22 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                                 <MenuItem value="false">Non-Billable</MenuItem>
                             </Select>
                         </FormControl>
+                    ) : currentFilterColumn === 'priority' ? (
+                        <FormControl fullWidth size="small">
+                            <InputLabel>Priority</InputLabel>
+                            <Select
+                                value={columnFilters.priority}
+                                onChange={(e) => handleColumnFilterChange('priority', e.target.value)}
+                                input={<OutlinedInput label="Priority" />}
+                            >
+                                <MenuItem value="">
+                                    <em>All</em>
+                                </MenuItem>
+                                <MenuItem value="High">High</MenuItem>
+                                <MenuItem value="Medium">Medium</MenuItem>
+                                <MenuItem value="Low">Low</MenuItem>
+                            </Select>
+                        </FormControl>
                     ) : (
                         <TextField
                             fullWidth
@@ -1743,6 +1784,7 @@ const PocTable = ({ onNavigate, onLogout, user }) => {
                             <DetailItem label="Description" value={selectedPoc.description || '-'} />
                             <DetailItem label="Client Type" value={selectedPoc.entityType} />
                             <DetailItem label="Usecase Type" value={selectedPoc.pocType} />
+                            <DetailItem label="Priority" value={selectedPoc.priority || '-'} />
                             <DetailItem label="Client Name" value={selectedPoc.entityName} />
                             <DetailItem
                                 label="Partner Name"
